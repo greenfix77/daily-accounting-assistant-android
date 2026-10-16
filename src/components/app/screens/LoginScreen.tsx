@@ -83,6 +83,7 @@ export default function LoginScreen({ params }: { params?: Record<string, unknow
             type="text"
             inputMode="email"
             dir="ltr"
+            className="text-right"
             placeholder={f.t("auth.emailPlaceholder")}
             value={email}
             onChange={(e) => setEmail(e.target.value)}
@@ -95,7 +96,7 @@ export default function LoginScreen({ params }: { params?: Record<string, unknow
               placeholder={f.t("auth.passwordPlaceholder")}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="pe-11"
+              className="pe-11 text-right"
               disabled={busy}
             />
             <button

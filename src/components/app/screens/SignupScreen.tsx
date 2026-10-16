@@ -82,6 +82,7 @@ export default function SignupScreen({ params }: { params?: Record<string, unkno
         >
           <PillInput
             type="text"
+            className="text-right"
             placeholder={f.t("auth.namePlaceholder")}
             value={name}
             onChange={(e) => setName(e.target.value)}
@@ -91,6 +92,7 @@ export default function SignupScreen({ params }: { params?: Record<string, unkno
             type="text"
             inputMode="email"
             dir="ltr"
+            className="text-right"
             placeholder={f.t("auth.emailPlaceholder")}
             value={email}
             onChange={(e) => setEmail(e.target.value)}
@@ -99,6 +101,7 @@ export default function SignupScreen({ params }: { params?: Record<string, unkno
           <PillInput
             type="password"
             dir="ltr"
+            className="text-right"
             placeholder={f.t("auth.passwordPlaceholder")}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
@@ -107,6 +110,7 @@ export default function SignupScreen({ params }: { params?: Record<string, unkno
           <PillInput
             type="password"
             dir="ltr"
+            className="text-right"
             placeholder={f.t("auth.confirmPasswordPlaceholder")}
             value={confirm}
             onChange={(e) => setConfirm(e.target.value)}

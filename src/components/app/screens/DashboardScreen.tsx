@@ -29,7 +29,7 @@ import {
 } from "@/components/app/ui";
 import { useDashboard, useSettings, useReminders } from "@/lib/hooks";
 import { useAppStore } from "@/lib/store";
-import { WEEKDAY_SHORT_FA, WEEKDAY_NAMES_EN } from "@/lib/jalali";
+import { WEEKDAY_SHORT_FA, WEEKDAY_NAMES_FA, WEEKDAY_NAMES_EN } from "@/lib/jalali";
 import { formatMoneyShort } from "@/lib/format";
 import type { TransactionDTO, UpcomingDTO } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -146,6 +146,14 @@ export default function DashboardScreen({ params }: { params?: Record<string, un
   const firstName = (settings?.name ?? "").split(" ")[0] || settings?.name || "";
   const reminderCount = pendingReminders?.length ?? 0;
 
+  // «شنبه ۲۴ مرداد ۱۴۰۳» — respects calendar/language settings
+  const todayLabel = React.useMemo(() => {
+    const now = new Date();
+    const wd = (now.getDay() + 1) % 7; // Saturday-first
+    const wdName = f.lang === "fa" ? WEEKDAY_NAMES_FA[wd] : (WEEKDAY_NAMES_EN[wd] ?? "");
+    return `${wdName} ${f.dateLong(now)}`.trim();
+  }, [f]);
+
   const weekData = React.useMemo(
     () =>
       (d?.week ?? []).map((w) => {
@@ -163,9 +171,12 @@ export default function DashboardScreen({ params }: { params?: Record<string, un
     <div className="flex-1 flex flex-col min-h-0 bg-background">
       {/* ── Header (custom, tab root — no back) ── */}
       <header className="flex items-center gap-2 px-4 py-3 shrink-0">
-        <h1 className="text-[18px] font-extrabold text-foreground flex-1 truncate">
-          {f.t("dash.greeting", { name: firstName })}
-        </h1>
+        <div className="flex-1 min-w-0">
+          <h1 className="text-[18px] font-extrabold text-foreground leading-tight truncate">
+            {f.t("dash.greeting", { name: firstName })}
+          </h1>
+          <p className="text-[12px] text-muted-foreground mt-0.5 truncate">{todayLabel}</p>
+        </div>
         <button
           onClick={() => push("reminders")}
           aria-label="reminders"
