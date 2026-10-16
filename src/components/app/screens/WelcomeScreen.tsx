@@ -24,7 +24,11 @@ export default function WelcomeScreen({ params }: { params?: Record<string, unkn
       <div className="absolute -bottom-28 start-1/4 w-72 h-72 rounded-full bg-income-soft/60 blur-3xl pointer-events-none" />
 
       <div className="relative flex-1 overflow-y-auto app-screen-scroll px-6 pb-4 pt-8 flex flex-col items-center justify-center gap-3">
-        <img src="/images/welcome.png" alt={f.t("app.name")} className="w-44 h-44 object-contain" />
+        <img
+          src="/images/welcome.png"
+          alt={f.t("app.name")}
+          className="w-44 h-44 object-cover rounded-[28px] shadow-md shadow-primary/10 ring-1 ring-black/5"
+        />
         <h1 className="text-[22px] font-extrabold text-foreground mt-1">{f.t("app.name")}</h1>
         <p className="text-muted-foreground text-[13px] text-center">{f.t("app.tagline")}</p>
 
