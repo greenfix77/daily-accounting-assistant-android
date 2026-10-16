@@ -68,5 +68,9 @@ server.log
 /agent-ctx/
 /Caddyfile
 
+# ── Capacitor / Android APK build ──
+/apk-out/
+/assets/icon-raw.png
+
 # ── env example exception ──
 !.env.example

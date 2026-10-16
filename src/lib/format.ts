@@ -1,5 +1,5 @@
 import type { CurrencyCode, Lang } from "./types";
-import { groupDigits, toFaDigits, type CalendarType, formatDateShort, formatDateLong, jalaliMonthLabel } from "./jalali";
+import { groupDigits, toFaDigits, toEnDigits, type CalendarType, formatDateShort, formatDateLong, jalaliMonthLabel } from "./jalali";
 
 export const CURRENCY_LABEL: Record<CurrencyCode, { fa: string; en: string }> = {
   IRT: { fa: "تومان", en: "Toman" },
@@ -67,7 +67,8 @@ export function formatAmountInput(raw: string, lang: Lang = "fa"): string {
 }
 
 export function parseAmountInput(raw: string): number {
-  const digits = raw.replace(/[^\d]/g, "");
+  // Persian-aware: accept ۲۵۰٬۰۰۰ / 250,000 / ۲۵۰۰۰۰ …
+  const digits = toEnDigits(String(raw)).replace(/[^\d]/g, "");
   return digits ? Number(digits) : 0;
 }
 

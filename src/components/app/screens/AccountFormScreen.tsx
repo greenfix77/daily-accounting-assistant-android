@@ -6,6 +6,7 @@ import { Trash2 } from "lucide-react";
 import { useAppStore } from "@/lib/store";
 import { useAccounts, useSaveAccount, useDeleteAccount } from "@/lib/hooks";
 import { formatAmountInput, parseAmountInput } from "@/lib/format";
+import { toEnDigits } from "@/lib/jalali";
 import type { AccountType } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import {
@@ -173,7 +174,7 @@ export default function AccountFormScreen({ params }: { params?: Record<string, 
                 dir="ltr"
                 inputMode="numeric"
                 value={balance}
-                onChange={(e) => setBalance(formatAmountInput(e.target.value, f.lang))}
+                onChange={(e) => setBalance(formatAmountInput(toEnDigits(e.target.value), f.lang))}
                 placeholder="0"
                 className="pl-20 text-right"
               />

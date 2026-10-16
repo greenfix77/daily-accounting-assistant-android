@@ -14,6 +14,7 @@ import { toast } from "sonner";
 import { ConfirmDialog, JalaliDatePicker, ScreenHeader, useAppFormat } from "@/components/app/ui";
 import { useAppStore } from "@/lib/store";
 import { useRestoreBackup } from "@/lib/hooks";
+import { exportCsv, getBackup, getTransactions } from "@/lib/local/api";
 import { endOfDay, startOfDay } from "@/lib/jalali";
 import type { TransactionDTO } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -63,15 +64,11 @@ export default function ExportScreen({ params }: { params?: Record<string, unkno
   const [pendingRestore, setPendingRestore] = React.useState<Record<string, unknown> | null>(null);
   const fileRef = React.useRef<HTMLInputElement>(null);
 
-  /** query string with date range for API calls */
-  const buildQuery = (): string => {
-    const fromISO = from ? startOfDay(from).toISOString() : undefined;
-    const toISO = to ? endOfDay(to).toISOString() : undefined;
-    const p = new URLSearchParams();
-    if (fromISO) p.set("from", fromISO);
-    if (toISO) p.set("to", toISO);
-    return p.toString();
-  };
+  /** local-layer date range (ISO strings) */
+  const range = (): { from?: string; to?: string } => ({
+    from: from ? startOfDay(from).toISOString() : undefined,
+    to: to ? endOfDay(to).toISOString() : undefined,
+  });
 
   const run = async (key: BusyKey, fn: () => Promise<void>) => {
     if (busy) return;
@@ -86,25 +83,24 @@ export default function ExportScreen({ params }: { params?: Record<string, unkno
   };
 
   const downloadCsv = async (name: string) => {
-    const q = buildQuery();
-    const res = await fetch("/api/export" + (q ? `?${q}` : ""));
-    if (!res.ok) throw new Error("export failed");
-    saveBlob(await res.blob(), name);
+    const csv = await exportCsv(range());
+    // CSV text includes the \uFEFF BOM so Excel opens Persian text correctly
+    saveBlob(new Blob([csv], { type: "text/csv; charset=utf-8" }), name);
     toast.success(f.t("exp.exported"));
   };
 
   const backup = async () => {
-    const res = await fetch("/api/backup");
-    if (!res.ok) throw new Error("backup failed");
-    saveBlob(await res.blob(), `backup-${new Date().toISOString().slice(0, 10)}.json`);
+    const data = await getBackup();
+    saveBlob(
+      new Blob([JSON.stringify(data)], { type: "application/json" }),
+      `backup-${new Date().toISOString().slice(0, 10)}.json`
+    );
     toast.success(f.t("exp.backupDone"));
   };
 
   const printPdf = async () => {
-    const q = buildQuery();
-    const res = await fetch(`/api/transactions?limit=500${q ? `&${q}` : ""}`);
-    if (!res.ok) throw new Error("pdf failed");
-    const list = (await res.json()) as TransactionDTO[];
+    const { from: fromISO, to: toISO } = range();
+    const list = await getTransactions({ limit: 500, from: fromISO, to: toISO });
 
     // Pre-build all translated strings (f is not available inside the iframe HTML)
     const appTitle = f.t("app.name");

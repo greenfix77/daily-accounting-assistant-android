@@ -6,7 +6,7 @@ import { Check, Pencil, PiggyBank, Plus, Trash2 } from "lucide-react";
 import { useAppStore } from "@/lib/store";
 import { useBudgets, useSaveBudget, useDeleteBudget, useCategories } from "@/lib/hooks";
 import type { BudgetItemDTO } from "@/lib/types";
-import { jalaliMonthKey } from "@/lib/jalali";
+import { jalaliMonthKey, toEnDigits } from "@/lib/jalali";
 import { formatAmountInput, parseAmountInput } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import {
@@ -257,7 +257,7 @@ export default function BudgetScreen({ params }: { params?: Record<string, unkno
                 dir="ltr"
                 inputMode="numeric"
                 value={totalAmount}
-                onChange={(e) => setTotalAmount(formatAmountInput(e.target.value, f.lang))}
+                onChange={(e) => setTotalAmount(formatAmountInput(toEnDigits(e.target.value), f.lang))}
                 placeholder="0"
                 className="pl-20 text-right"
                 autoFocus
@@ -312,7 +312,7 @@ export default function BudgetScreen({ params }: { params?: Record<string, unkno
                 dir="ltr"
                 inputMode="numeric"
                 value={addAmount}
-                onChange={(e) => setAddAmount(formatAmountInput(e.target.value, f.lang))}
+                onChange={(e) => setAddAmount(formatAmountInput(toEnDigits(e.target.value), f.lang))}
                 placeholder="0"
                 className="pl-20 text-right"
               />
@@ -339,7 +339,7 @@ export default function BudgetScreen({ params }: { params?: Record<string, unkno
                 dir="ltr"
                 inputMode="numeric"
                 value={editAmount}
-                onChange={(e) => setEditAmount(formatAmountInput(e.target.value, f.lang))}
+                onChange={(e) => setEditAmount(formatAmountInput(toEnDigits(e.target.value), f.lang))}
                 placeholder="0"
                 className="pl-20 text-right"
                 autoFocus

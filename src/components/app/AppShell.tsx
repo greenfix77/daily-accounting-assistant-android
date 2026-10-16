@@ -3,6 +3,8 @@
 import * as React from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useTheme } from "next-themes";
+import { Capacitor } from "@capacitor/core";
+import { App as CapApp } from "@capacitor/app";
 import { Home, ArrowLeftRight, BarChart3, LayoutGrid, Plus, Loader2 } from "lucide-react";
 import { useAppStore, useCurrentScreen, isTabRoot, type Tab } from "@/lib/store";
 import { useSettings } from "@/lib/hooks";
@@ -157,6 +159,23 @@ export default function AppShell() {
   React.useEffect(() => {
     if (settings && settings.onboarded) setAuthed(true);
   }, [settings?.onboarded, setAuthed]);
+
+  // Android hardware back button → walk our internal screen stack
+  React.useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return;
+    let handle: { remove: () => Promise<void> } | null = null;
+    CapApp.addListener("backButton", () => {
+      const s = useAppStore.getState();
+      if (s.stack.length > 0) s.back();
+      else if (s.tab !== "home") s.setTab("home");
+      else void CapApp.exitApp();
+    }).then((h) => {
+      handle = h;
+    });
+    return () => {
+      void handle?.remove();
+    };
+  }, []);
 
   if (isLoading || !settings) {
     return (
