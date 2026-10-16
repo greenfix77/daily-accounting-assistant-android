@@ -21,7 +21,7 @@ import {
 import { toast } from "sonner";
 import { toEnDigits } from "@/lib/jalali";
 import {
-  biometricSupported,
+  biometricAvailable,
   biometricRegistered,
   biometricRegister,
   biometricRemove,
@@ -160,8 +160,14 @@ export default function SettingsScreen({ params }: { params?: Record<string, unk
   const [bioRegistered, setBioRegistered] = React.useState(false);
 
   React.useEffect(() => {
-    setBioSupported(biometricSupported());
+    let alive = true;
+    biometricAvailable().then((ok) => {
+      if (alive) setBioSupported(ok);
+    });
     setBioRegistered(biometricRegistered());
+    return () => {
+      alive = false;
+    };
   }, [settings?.biometricLock]);
 
   const themeLabel = (t: ThemeMode) =>

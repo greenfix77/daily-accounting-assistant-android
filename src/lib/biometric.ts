@@ -1,18 +1,22 @@
 /**
- * Local biometric unlock (fingerprint / device biometry) via the WebAuthn
- * platform authenticator — works in Android Chrome, iOS Safari, Windows Hello.
+ * Local biometric unlock (fingerprint / device biometry) — dual adapter.
  *
- * Design notes:
- * - This is a LOCAL app-lock: the credential is registered once (with a
- *   user-verification-required platform authenticator) and its ID is stored
- *   in localStorage. Unlocking = a successful user-verified assertion.
- * - No server involvement; data never leaves the device. This matches the
- *   app's offline-first privacy model.
- * - APK phase: swap this adapter with the Capacitor native biometric plugin
- *   (@capacitor-community/native-biometric) behind the same 5 functions.
+ * - APK / native (Capacitor): uses @capgo/capacitor-native-biometric, i.e. the
+ *   Android system BiometricPrompt backed by the device's secure hardware.
+ *   A random secret is anchored in the Android Keystore via setCredentials()
+ *   as a local "registration" marker.
+ * - Web (browser preview / PWA): WebAuthn platform authenticator — works in
+ *   Android Chrome, iOS Safari, Windows Hello.
+ *
+ * Both paths live behind the same 5 functions; no server involvement and no
+ * data ever leaves the device (offline-first privacy model).
  */
 
+import { Capacitor } from "@capacitor/core";
+import { NativeBiometric } from "@capgo/capacitor-native-biometric";
+
 const STORAGE_KEY = "bio-cred-id";
+const BIO_SERVER = "hesabyar-reyra";
 
 // ── base64url helpers (ArrayBuffer ⇄ string) ─────────────────
 function b64urlEncode(buf: ArrayBuffer): string {
@@ -31,14 +35,35 @@ function b64urlDecode(s: string): ArrayBuffer {
 }
 
 // ── capability detection ─────────────────────────────────────
-/** WebAuthn platform-authenticator support (secure context required). */
+/** Basic platform support (sync): native Capacitor or WebAuthn-capable web. */
 export function biometricSupported(): boolean {
   if (typeof window === "undefined") return false;
+  if (Capacitor.isNativePlatform()) return true;
   if (!window.isSecureContext) return false;
   const pk = (window as unknown as { PublicKeyCredential?: { isUserVerifyingPlatformAuthenticatorAvailable?: unknown } })
     .PublicKeyCredential;
-  if (!pk || typeof pk.isUserVerifyingPlatformAuthenticatorAvailable !== "function") return false;
-  return true;
+  return !!pk && typeof pk.isUserVerifyingPlatformAuthenticatorAvailable === "function";
+}
+
+/** Deep availability probe (async): hardware/biometry actually present? */
+export async function biometricAvailable(): Promise<boolean> {
+  if (typeof window === "undefined") return false;
+  if (Capacitor.isNativePlatform()) {
+    try {
+      const res = await NativeBiometric.isAvailable({ useFallback: false });
+      return !!res.isAvailable;
+    } catch {
+      return false;
+    }
+  }
+  if (!biometricSupported()) return false;
+  try {
+    return await (window.PublicKeyCredential as {
+      isUserVerifyingPlatformAuthenticatorAvailable: () => Promise<boolean>;
+    }).isUserVerifyingPlatformAuthenticatorAvailable();
+  } catch {
+    return false;
+  }
 }
 
 export function biometricRegistered(): boolean {
@@ -51,8 +76,42 @@ export function biometricRegistered(): boolean {
 }
 
 // ── register / authenticate / remove ─────────────────────────
-/** Registers a platform credential guarded by the device biometry. */
+/**
+ * Registers the device biometry as the app-lock method.
+ * Native: one confirmation BiometricPrompt, then anchors a random secret in
+ * the Android Keystore. Web: creates a user-verified platform credential.
+ */
 export async function biometricRegister(): Promise<boolean> {
+  if (typeof window === "undefined") return false;
+
+  if (Capacitor.isNativePlatform()) {
+    try {
+      const res = await NativeBiometric.isAvailable({ useFallback: false });
+      if (!res.isAvailable) return false;
+      // Confirm identity once so enabling the feature requires the biometry
+      await NativeBiometric.verifyIdentity({
+        title: "ورود با اثر انگشت",
+        subtitle: "حساب یار ری را",
+        reason: "برای فعال‌سازی قفل اثر انگشت، هویت خود را تأیید کنید",
+        negativeButtonText: "لغو",
+        useFallback: false,
+        maxAttempts: 3,
+      });
+      // Anchor a device-local secret in secure storage (Keystore-backed)
+      const secret = b64urlEncode(crypto.getRandomValues(new Uint8Array(32)).buffer);
+      await NativeBiometric.setCredentials({
+        username: "reyra-unlock",
+        password: secret,
+        server: BIO_SERVER,
+      });
+      window.localStorage.setItem(STORAGE_KEY, "native-keystore");
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  // ── Web path (WebAuthn) ──
   if (!biometricSupported()) return false;
   const challenge = crypto.getRandomValues(new Uint8Array(32));
   const userId = crypto.getRandomValues(new Uint8Array(16));
@@ -84,9 +143,31 @@ export async function biometricRegister(): Promise<boolean> {
   return true;
 }
 
-/** Prompts the device biometry; resolves true on a user-verified assertion. */
+/** Prompts the device biometry; resolves true on a user-verified unlock. */
 export async function biometricAuthenticate(): Promise<boolean> {
-  if (!biometricSupported() || !biometricRegistered()) return false;
+  if (typeof window === "undefined") return false;
+  if (!biometricRegistered()) return false;
+
+  if (Capacitor.isNativePlatform()) {
+    try {
+      const res = await NativeBiometric.isAvailable({ useFallback: false });
+      if (!res.isAvailable) return false;
+      await NativeBiometric.verifyIdentity({
+        title: "باز کردن قفل برنامه",
+        subtitle: "حساب یار ری را",
+        reason: "اثر انگشت خود را برای ورود قرار دهید",
+        negativeButtonText: "لغو",
+        useFallback: false,
+        maxAttempts: 3,
+      });
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  // ── Web path (WebAuthn) ──
+  if (!biometricSupported()) return false;
   const idB64 = window.localStorage.getItem(STORAGE_KEY);
   if (!idB64) return false;
   const challenge = crypto.getRandomValues(new Uint8Array(32));
@@ -103,6 +184,11 @@ export async function biometricAuthenticate(): Promise<boolean> {
 
 export function biometricRemove(): void {
   if (typeof window === "undefined") return;
+  if (Capacitor.isNativePlatform()) {
+    NativeBiometric.deleteCredentials({ server: BIO_SERVER }).catch(() => {
+      /* best-effort */
+    });
+  }
   try {
     window.localStorage.removeItem(STORAGE_KEY);
   } catch {
