@@ -36,11 +36,11 @@ jobs:
       - name: Generate app icons & splash
         run: bunx @capacitor/assets generate --android --iconBackgroundColor '#ebf3ed' --splashBackgroundColor '#ebf3ed' --assetPath 'assets'
 
-      - name: Setup Java 17
+      - name: Setup Java 21
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: "17"
+          java-version: "21"
 
       - name: Assemble debug APK
         run: |
