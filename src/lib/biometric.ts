@@ -113,6 +113,9 @@ export async function biometricRegister(): Promise<boolean> {
 
   // ── Web path (WebAuthn) ──
   if (!biometricSupported()) return false;
+  // fail fast when no platform authenticator exists — otherwise the
+  // credentials.create() request may hang until its timeout
+  if (!(await biometricAvailable())) return false;
   const challenge = crypto.getRandomValues(new Uint8Array(32));
   const userId = crypto.getRandomValues(new Uint8Array(16));
   const cred = (await navigator.credentials.create({
@@ -170,6 +173,9 @@ export async function biometricAuthenticate(): Promise<boolean> {
   if (!biometricSupported()) return false;
   const idB64 = window.localStorage.getItem(STORAGE_KEY);
   if (!idB64) return false;
+  // fail fast when no platform authenticator exists — otherwise the
+  // credentials.get() request may hang until its timeout
+  if (!(await biometricAvailable())) return false;
   const challenge = crypto.getRandomValues(new Uint8Array(32));
   const assertion = (await navigator.credentials.get({
     publicKey: {

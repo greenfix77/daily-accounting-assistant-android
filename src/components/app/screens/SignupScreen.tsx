@@ -5,6 +5,8 @@ import { ChevronRight, Sprout, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { useAppStore } from "@/lib/store";
 import { useRegister, useUpdateSettings } from "@/lib/hooks";
+import { biometricRemove } from "@/lib/biometric";
+import { BIO_EMAIL_KEY } from "@/lib/use-biometric-login";
 import { useAppFormat, PillInput, GradientButton } from "@/components/app/ui";
 import { Switch } from "@/components/ui/switch";
 
@@ -41,11 +43,18 @@ export default function SignupScreen({ params }: { params?: Record<string, unkno
     }
     setBusy(true);
     try {
+      // a NEW account invalidates any previous fingerprint binding
+      biometricRemove();
+      try {
+        localStorage.removeItem(BIO_EMAIL_KEY);
+      } catch {
+        /* ignore */
+      }
       await register.mutateAsync({ name: name.trim(), email: email.trim() });
       setAuthed(true);
       setTab("home");
       popToRoot();
-      await updateSettings.mutateAsync({ onboarded: true });
+      await updateSettings.mutateAsync({ onboarded: true, biometricLock: false });
       toast.success(f.t("auth.welcomeBack"));
     } catch {
       toast.error(f.t("common.error"));

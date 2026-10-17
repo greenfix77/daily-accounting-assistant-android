@@ -1,14 +1,16 @@
 "use client";
 
 import * as React from "react";
-import { Sparkles, ShieldCheck, WifiOff, type LucideIcon } from "lucide-react";
+import { Sparkles, ShieldCheck, WifiOff, Fingerprint, Loader2, type LucideIcon } from "lucide-react";
 import { useAppStore } from "@/lib/store";
 import { useAppFormat, GradientButton } from "@/components/app/ui";
+import { useBiometricLogin } from "@/lib/use-biometric-login";
 
 export default function WelcomeScreen({ params }: { params?: Record<string, unknown> }) {
   void params;
   const f = useAppFormat();
   const { push } = useAppStore();
+  const bio = useBiometricLogin();
 
   const feats: { icon: LucideIcon; key: string }[] = [
     { icon: Sparkles, key: "feat.simple" },
@@ -47,6 +49,21 @@ export default function WelcomeScreen({ params }: { params?: Record<string, unkn
 
       <div className="relative px-6 pb-8 pt-2 flex flex-col gap-2 w-full max-w-sm mx-auto">
         <GradientButton onClick={() => push("signup")}>{f.t("auth.start")}</GradientButton>
+        {bio.available && (
+          <button
+            type="button"
+            onClick={bio.loginWithFingerprint}
+            disabled={bio.busy}
+            className="h-12 rounded-2xl bg-secondary text-primary text-[14px] font-bold flex items-center justify-center gap-2 hover:bg-accent active:scale-[0.99] transition-all disabled:opacity-60"
+          >
+            {bio.busy ? (
+              <Loader2 className="w-5 h-5 animate-spin" />
+            ) : (
+              <Fingerprint className="w-5 h-5" />
+            )}
+            {f.t("auth.fingerprintLogin")}
+          </button>
+        )}
         <button
           type="button"
           onClick={() => push("login")}

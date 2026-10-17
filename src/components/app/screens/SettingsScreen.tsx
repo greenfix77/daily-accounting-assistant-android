@@ -26,6 +26,7 @@ import {
   biometricRegister,
   biometricRemove,
 } from "@/lib/biometric";
+import { BIO_EMAIL_KEY } from "@/lib/use-biometric-login";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
@@ -185,6 +186,11 @@ export default function SettingsScreen({ params }: { params?: Record<string, unk
       }
     } else {
       biometricRemove();
+      try {
+        localStorage.removeItem(BIO_EMAIL_KEY);
+      } catch {
+        /* ignore */
+      }
       updateSettings.mutate({ appLock: false, pin: null, biometricLock: false });
     }
   };
@@ -198,6 +204,12 @@ export default function SettingsScreen({ params }: { params?: Record<string, unk
       try {
         const ok = await biometricRegister();
         if (ok) {
+          // bind the current account so entry screens can offer fingerprint login
+          try {
+            localStorage.setItem("bio-email", settings?.email ?? "");
+          } catch {
+            /* ignore */
+          }
           await updateSettings.mutateAsync({ biometricLock: true });
           toast.success(f.t("set.biometricOn"));
         } else {
@@ -228,8 +240,10 @@ export default function SettingsScreen({ params }: { params?: Record<string, unk
   };
 
   const doLogout = async () => {
-    biometricRemove();
-    await updateSettings.mutateAsync({ onboarded: false, appLock: false, pin: null, biometricLock: false });
+    // Keep the security configuration (app lock, PIN, fingerprint) and the
+    // biometric binding — the entry screens offer fingerprint login after
+    // logout. They are only cleared when the user disables them explicitly.
+    await updateSettings.mutateAsync({ onboarded: false });
     setAuthed(false);
     popToRoot();
     toast.success(f.t("auth.logoutSuccess"));

@@ -1,12 +1,13 @@
 "use client";
 
 import * as React from "react";
-import { ChevronRight, Sprout, Eye, EyeOff, Loader2 } from "lucide-react";
+import { ChevronRight, Sprout, Eye, EyeOff, Loader2, Fingerprint } from "lucide-react";
 import { toast } from "sonner";
 import { ApiError } from "@/lib/api";
 import { useAppStore } from "@/lib/store";
 import { useLogin, useUpdateSettings } from "@/lib/hooks";
 import { useAppFormat, PillInput, GradientButton } from "@/components/app/ui";
+import { useBiometricLogin } from "@/lib/use-biometric-login";
 import { Checkbox } from "@/components/ui/checkbox";
 
 export default function LoginScreen({ params }: { params?: Record<string, unknown> }) {
@@ -15,6 +16,7 @@ export default function LoginScreen({ params }: { params?: Record<string, unknow
   const { back, push, setAuthed, popToRoot, setTab } = useAppStore();
   const updateSettings = useUpdateSettings();
   const login = useLogin();
+  const bio = useBiometricLogin();
 
   const [email, setEmail] = React.useState("");
   const [password, setPassword] = React.useState("");
@@ -126,6 +128,22 @@ export default function LoginScreen({ params }: { params?: Record<string, unknow
           <GradientButton type="submit" disabled={busy}>
             {busy ? <Loader2 className="w-5 h-5 animate-spin" /> : f.t("auth.login")}
           </GradientButton>
+
+          {bio.available && (
+            <button
+              type="button"
+              onClick={bio.loginWithFingerprint}
+              disabled={busy || bio.busy}
+              className="h-12 rounded-2xl bg-secondary text-primary text-[14px] font-bold flex items-center justify-center gap-2 hover:bg-accent active:scale-[0.99] transition-all disabled:opacity-60"
+            >
+              {bio.busy ? (
+                <Loader2 className="w-5 h-5 animate-spin" />
+              ) : (
+                <Fingerprint className="w-5 h-5" />
+              )}
+              {f.t("auth.fingerprintLogin")}
+            </button>
+          )}
         </form>
 
         <p className="text-center text-[13px] text-muted-foreground mt-2">
