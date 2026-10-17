@@ -4,11 +4,23 @@ import * as React from "react";
 import { Sprout, CheckCircle2, Lock } from "lucide-react";
 import { useAppStore } from "@/lib/store";
 import { useAppFormat, ScreenHeader } from "@/components/app/ui";
+import { getAppVersion } from "@/lib/app-version";
 
 export default function AboutScreen({ params }: { params?: Record<string, unknown> }) {
   void params;
   const f = useAppFormat();
   const { back } = useAppStore();
+  const [version, setVersion] = React.useState<string>("");
+
+  React.useEffect(() => {
+    let alive = true;
+    getAppVersion().then((v) => {
+      if (alive) setVersion(v);
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   const features = [
     "feat.simple",
@@ -30,7 +42,9 @@ export default function AboutScreen({ params }: { params?: Record<string, unknow
             <Sprout className="w-8 h-8 text-white" />
           </div>
           <p className="font-extrabold text-[16px] text-foreground mt-1">{f.t("app.name")}</p>
-          <p className="text-[12px] text-muted-foreground">{f.t("app.version")}</p>
+          <p className="text-[12px] text-muted-foreground">
+            {version ? f.t("app.version", { v: version }) : "\u200f"}
+          </p>
           <p className="text-[13px] leading-6 text-foreground/70 mt-1">{f.t("set.aboutText")}</p>
         </div>
 

@@ -12,60 +12,19 @@ import {
   HandCoins,
 } from "lucide-react";
 import {
-  ResponsiveContainer,
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  Tooltip as RTooltip,
-  CartesianGrid,
-} from "recharts";
-import {
   useAppFormat,
-  Money,
   AmountText,
   IconBubble,
   ProgressBar,
 } from "@/components/app/ui";
 import { useDashboard, useSettings, useReminders } from "@/lib/hooks";
 import { useAppStore } from "@/lib/store";
-import { WEEKDAY_SHORT_FA, WEEKDAY_NAMES_FA, WEEKDAY_NAMES_EN } from "@/lib/jalali";
-import { formatMoneyShort } from "@/lib/format";
+import { WEEKDAY_NAMES_FA, WEEKDAY_NAMES_EN } from "@/lib/jalali";
 import type { TransactionDTO, UpcomingDTO } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 const INCOME_COLOR = "#4E9B72";
 const EXPENSE_COLOR = "#F0A868";
-
-// ── Week chart tooltip ───────────────────────────────────────
-function WeekTooltip({
-  active,
-  payload,
-  label,
-}: {
-  active?: boolean;
-  payload?: { value?: number; dataKey?: string }[];
-  label?: string;
-}) {
-  const f = useAppFormat();
-  if (!active || !payload?.length) return null;
-  return (
-    <div className="bg-card rounded-xl card-soft px-3 py-2 flex flex-col gap-1 border border-border/60">
-      <span className="text-[11px] font-bold text-foreground">{label}</span>
-      {payload.map((p) => (
-        <div key={p.dataKey} className="flex items-center gap-2 text-[11px]">
-          <span
-            className="w-2 h-2 rounded-full shrink-0"
-            style={{ backgroundColor: p.dataKey === "income" ? INCOME_COLOR : EXPENSE_COLOR }}
-          />
-          <span className={cn(p.dataKey === "income" ? "text-income" : "text-expense", "font-bold")}>
-            {formatMoneyShort(p.value ?? 0, f.lang)}
-          </span>
-        </div>
-      ))}
-    </div>
-  );
-}
 
 // ── Recent transaction row ───────────────────────────────────
 function TxRow({ tx }: { tx: TransactionDTO }) {
@@ -154,17 +113,6 @@ export default function DashboardScreen({ params }: { params?: Record<string, un
     return `${wdName} ${f.dateLong(now)}`.trim();
   }, [f]);
 
-  const weekData = React.useMemo(
-    () =>
-      (d?.week ?? []).map((w) => {
-        const wd = (new Date(w.date).getDay() + 1) % 7;
-        const label =
-          f.lang === "fa" ? WEEKDAY_SHORT_FA[wd] : (WEEKDAY_NAMES_EN[wd] ?? "");
-        return { label, income: w.income, expense: w.expense };
-      }),
-    [d?.week, f.lang]
-  );
-
   const budget = d?.budget ?? null;
 
   return (
@@ -205,8 +153,8 @@ export default function DashboardScreen({ params }: { params?: Record<string, un
               <div className="animate-pulse bg-secondary rounded-2xl h-20" />
               <div className="animate-pulse bg-secondary rounded-2xl h-20" />
             </div>
-            <div className="animate-pulse bg-secondary rounded-2xl h-44" />
             <div className="animate-pulse bg-secondary rounded-2xl h-40" />
+            <div className="animate-pulse bg-secondary rounded-2xl h-44" />
           </>
         ) : (
           <>
@@ -277,37 +225,6 @@ export default function DashboardScreen({ params }: { params?: Record<string, un
                 </p>
               </button>
             )}
-
-            {/* ── Week chart ── */}
-            <div className="bg-card rounded-3xl p-4 card-soft">
-              <p className="font-bold text-[14px] text-foreground mb-1">{f.t("dash.weekChart")}</p>
-              <div className="flex items-center gap-4 mb-1">
-                <span className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-                  <span className="w-2 h-2 rounded-full" style={{ backgroundColor: INCOME_COLOR }} />
-                  {f.t("rep.income")}
-                </span>
-                <span className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-                  <span className="w-2 h-2 rounded-full" style={{ backgroundColor: EXPENSE_COLOR }} />
-                  {f.t("rep.expense")}
-                </span>
-              </div>
-              <ResponsiveContainer width="100%" height={170}>
-                <BarChart data={weekData} barGap={2}>
-                  <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="var(--border)" />
-                  <XAxis
-                    dataKey="label"
-                    tick={{ fontSize: 11 }}
-                    axisLine={false}
-                    tickLine={false}
-                    reversed={f.lang === "fa"}
-                  />
-                  <YAxis width={0} axisLine={false} tickLine={false} />
-                  <RTooltip content={<WeekTooltip />} cursor={{ fill: "var(--secondary)", opacity: 0.5 }} />
-                  <Bar dataKey="income" fill={INCOME_COLOR} radius={[6, 6, 0, 0]} maxBarSize={18} />
-                  <Bar dataKey="expense" fill={EXPENSE_COLOR} radius={[6, 6, 0, 0]} maxBarSize={18} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
 
             {/* ── Recent transactions ── */}
             <div className="bg-card rounded-3xl p-4 card-soft">
@@ -394,6 +311,13 @@ export default function DashboardScreen({ params }: { params?: Record<string, un
                   </div>
                 )}
               </button>
+            </div>
+
+            {/* ── Prices (قیمت لحظه‌ای طلا، دلار و…) — فعلاً خالی ── */}
+            <div className="bg-card rounded-3xl p-4 card-soft" aria-label={f.t("dash.prices")}>
+              <p className="font-bold text-[14px] text-foreground mb-1">{f.t("dash.prices")}</p>
+              {/* reserved empty area — live asset prices (gold, USD, …) will land here */}
+              <div className="h-[190px]" aria-hidden="true" />
             </div>
           </>
         )}
