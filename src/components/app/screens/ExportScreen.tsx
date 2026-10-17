@@ -15,6 +15,7 @@ import { ConfirmDialog, JalaliDatePicker, ScreenHeader, useAppFormat } from "@/c
 import { useAppStore } from "@/lib/store";
 import { useRestoreBackup } from "@/lib/hooks";
 import { exportCsv, getBackup, getTransactions } from "@/lib/local/api";
+import { saveTextFile } from "@/lib/save-file";
 import { endOfDay, startOfDay } from "@/lib/jalali";
 import type { TransactionDTO } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -31,24 +32,15 @@ interface ExportAction {
 }
 
 const ACTIONS: ExportAction[] = [
-  { key: "excel", titleKey: "exp.excel", descKey: "exp.backupDesc", icon: FileSpreadsheet, color: "#4E9B72", softClass: "bg-income-soft" },
+  { key: "excel", titleKey: "exp.excel", icon: FileSpreadsheet, color: "#4E9B72", softClass: "bg-income-soft" },
   { key: "csv", titleKey: "exp.csv", icon: FileText, color: "#5E9EA0" },
   { key: "pdf", titleKey: "exp.pdf", descKey: "exp.pdfHint", icon: Printer, color: "#A78BCA" },
-  { key: "backup", titleKey: "exp.backup", icon: DatabaseBackup, color: "#F0A868", softClass: "bg-warn-soft" },
+  { key: "backup", titleKey: "exp.backup", descKey: "exp.backupDesc", icon: DatabaseBackup, color: "#F0A868", softClass: "bg-warn-soft" },
   { key: "restore", titleKey: "exp.restore", descKey: "exp.restoreDesc", icon: Upload, color: "#E5757A", softClass: "bg-expense-soft" },
 ];
 
 function escapeHtml(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-}
-
-function saveBlob(blob: Blob, name: string) {
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = name;
-  a.click();
-  URL.revokeObjectURL(url);
 }
 
 export default function ExportScreen({ params }: { params?: Record<string, unknown> }) {
@@ -85,17 +77,18 @@ export default function ExportScreen({ params }: { params?: Record<string, unkno
   const downloadCsv = async (name: string) => {
     const csv = await exportCsv(range());
     // CSV text includes the \uFEFF BOM so Excel opens Persian text correctly
-    saveBlob(new Blob([csv], { type: "text/csv; charset=utf-8" }), name);
-    toast.success(f.t("exp.exported"));
+    const res = await saveTextFile(csv, name, "text/csv; charset=utf-8");
+    toast.success(f.t(res === "shared" ? "exp.fileReady" : "exp.exported"));
   };
 
   const backup = async () => {
     const data = await getBackup();
-    saveBlob(
-      new Blob([JSON.stringify(data)], { type: "application/json" }),
-      `backup-${new Date().toISOString().slice(0, 10)}.json`
+    const res = await saveTextFile(
+      JSON.stringify(data),
+      `backup-${new Date().toISOString().slice(0, 10)}.json`,
+      "application/json"
     );
-    toast.success(f.t("exp.backupDone"));
+    toast.success(f.t(res === "shared" ? "exp.fileReady" : "exp.backupDone"));
   };
 
   const printPdf = async () => {
