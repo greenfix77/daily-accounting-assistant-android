@@ -11,10 +11,12 @@ import {
   Field,
   GradientButton,
   IconBubble,
+  JalaliDatePicker,
   PillInput,
   SegmentedTabs,
   useAppFormat,
 } from "@/components/app/ui";
+import { endOfDay, startOfDay } from "@/lib/jalali";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
@@ -103,6 +105,9 @@ export default function TransactionsScreen({ params }: { params?: Record<string,
   const [accountId, setAccountId] = React.useState("all");
   const [categoryId, setCategoryId] = React.useState("all");
   const [sort, setSort] = React.useState<SortKey>("date_desc");
+  const [limit, setLimit] = React.useState(20);
+  const [fromDate, setFromDate] = React.useState<Date | null>(null);
+  const [toDate, setToDate] = React.useState<Date | null>(null);
 
   const { data: accounts } = useAccounts();
   const { data: allCategories } = useCategories();
@@ -113,14 +118,32 @@ export default function TransactionsScreen({ params }: { params?: Record<string,
       q: q.trim() || undefined,
       accountId: accountId === "all" ? undefined : accountId,
       categoryId: categoryId === "all" ? undefined : categoryId,
+      from: fromDate ? startOfDay(fromDate).toISOString() : undefined,
+      to: toDate ? endOfDay(toDate).toISOString() : undefined,
       sort,
+      limit,
     }),
-    [tab, q, accountId, categoryId, sort]
+    [tab, q, accountId, categoryId, fromDate, toDate, sort, limit]
   );
 
   const { data: list, isLoading } = useTransactions(filters);
 
-  const filtersActive = accountId !== "all" || categoryId !== "all" || sort !== "date_desc";
+  const filtersActive =
+    accountId !== "all" ||
+    categoryId !== "all" ||
+    sort !== "date_desc" ||
+    limit !== 20 ||
+    fromDate !== null ||
+    toDate !== null;
+
+  const clearFilters = () => {
+    setAccountId("all");
+    setCategoryId("all");
+    setSort("date_desc");
+    setLimit(20);
+    setFromDate(null);
+    setToDate(null);
+  };
   const toggleSearch = () => {
     setSearchOpen((v) => {
       if (v) setQ("");
@@ -214,7 +237,7 @@ export default function TransactionsScreen({ params }: { params?: Record<string,
 
       {/* Filters dialog */}
       <Dialog open={filtersOpen} onOpenChange={setFiltersOpen}>
-        <DialogContent className="max-w-[340px] rounded-3xl bg-card card-soft" dir="rtl">
+        <DialogContent className="max-w-[340px] rounded-3xl bg-card card-soft max-h-[85vh] overflow-y-auto app-screen-scroll" dir="rtl">
           <DialogHeader>
             <DialogTitle className="text-[16px] text-start">{f.t("tx.filters")}</DialogTitle>
           </DialogHeader>
@@ -268,6 +291,41 @@ export default function TransactionsScreen({ params }: { params?: Record<string,
                 </SelectContent>
               </Select>
             </Field>
+
+            <Field label={f.t("tx.countLabel")}>
+              <SegmentedTabs
+                value={String(limit)}
+                onChange={(v) => setLimit(parseInt(v, 10))}
+                options={[
+                  { value: "20", label: f.fa(20) },
+                  { value: "50", label: f.fa(50) },
+                  { value: "100", label: f.fa(100) },
+                ]}
+              />
+            </Field>
+
+            <Field label={f.t("tx.dateRange")}>
+              <div className="grid grid-cols-2 gap-2">
+                <div className="flex flex-col gap-1.5">
+                  <span className="text-[11px] text-muted-foreground">{f.t("tx.dateFrom")}</span>
+                  <JalaliDatePicker value={fromDate} onChange={setFromDate} />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <span className="text-[11px] text-muted-foreground">{f.t("tx.dateTo")}</span>
+                  <JalaliDatePicker value={toDate} onChange={setToDate} />
+                </div>
+              </div>
+            </Field>
+
+            {filtersActive && (
+              <button
+                type="button"
+                onClick={clearFilters}
+                className="w-full h-10 rounded-2xl text-[13px] font-bold text-expense bg-expense-soft hover:brightness-95 transition-all"
+              >
+                {f.t("tx.clearFilters")}
+              </button>
+            )}
           </div>
         </DialogContent>
       </Dialog>

@@ -243,7 +243,7 @@ export default function DashboardScreen({ params }: { params?: Record<string, un
                 </p>
               ) : (
                 <div className="flex flex-col divide-y divide-border/50">
-                  {d.recent.map((tx) => (
+                  {d.recent.slice(0, 6).map((tx) => (
                     <TxRow key={tx.id} tx={tx} />
                   ))}
                 </div>

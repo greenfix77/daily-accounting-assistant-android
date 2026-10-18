@@ -138,6 +138,12 @@ export const fa: Dict = {
   "tx.noCategory": "بدون دسته‌بندی",
   "tx.to": "به",
   "tx.from": "از",
+  "tx.countLabel": "تعداد نمایش",
+  "tx.countItems": "{n} تراکنش",
+  "tx.dateRange": "بازه تاریخ",
+  "tx.dateFrom": "از تاریخ",
+  "tx.dateTo": "تا تاریخ",
+  "tx.clearFilters": "حذف همه فیلترها",
 
   // ── Accounts ──
   "acc.title": "حساب‌ها",
@@ -576,6 +582,12 @@ export const en: Dict = {
   "tx.noCategory": "No category",
   "tx.to": "to",
   "tx.from": "from",
+  "tx.countLabel": "Show",
+  "tx.countItems": "{n} transactions",
+  "tx.dateRange": "Date range",
+  "tx.dateFrom": "From",
+  "tx.dateTo": "To",
+  "tx.clearFilters": "Clear all filters",
 
   "acc.title": "Accounts",
   "acc.total": "Total Balance",
