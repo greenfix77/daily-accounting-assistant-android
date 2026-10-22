@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Trash2, X } from "lucide-react";
+import { Trash2, Wallet } from "lucide-react";
 import { toast } from "sonner";
 import {
   ConfirmDialog,
@@ -13,20 +13,11 @@ import {
   SegmentedTabs,
   useAppFormat,
 } from "../ui";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { useAccounts, useCategories, useDeleteRecurring, useRecurring, useSaveRecurring } from "@/lib/hooks";
+import { useDeleteRecurring, useRecurring, useSaveRecurring } from "@/lib/hooks";
 import { useAppStore } from "@/lib/store";
 import { formatAmountInput, parseAmountInput } from "@/lib/format";
 import { toEnDigits } from "@/lib/jalali";
 import type { Frequency } from "@/lib/types";
-
-type RecType = "INCOME" | "EXPENSE";
 
 export default function RecurringFormScreen({ params }: { params?: Record<string, unknown> }) {
   const p = params ?? {};
@@ -44,36 +35,22 @@ export default function RecurringFormScreen({ params }: { params?: Record<string
   );
 
   const [title, setTitle] = React.useState("");
-  const [type, setType] = React.useState<RecType>("EXPENSE");
   const [amount, setAmount] = React.useState("");
-  const [accountId, setAccountId] = React.useState("");
-  const [categoryId, setCategoryId] = React.useState("");
   const [frequency, setFrequency] = React.useState<Frequency>("MONTHLY");
   const [startDate, setStartDate] = React.useState<Date>(new Date());
-  const [endDate, setEndDate] = React.useState<Date | null>(null);
   const [totalCount, setTotalCount] = React.useState("");
+  const [paidBefore, setPaidBefore] = React.useState("0");
   const [confirmDelete, setConfirmDelete] = React.useState(false);
-
-  const { data: accounts = [] } = useAccounts();
-  const { data: categories = [] } = useCategories(type);
 
   React.useEffect(() => {
     if (!existing) return;
     setTitle(existing.title);
-    setType(existing.type);
     setAmount(existing.amount ? formatAmountInput(String(existing.amount), f.lang) : "");
-    setAccountId(existing.accountId);
-    setCategoryId(existing.categoryId ?? "");
     setFrequency(existing.frequency);
     setStartDate(new Date(existing.startDate));
-    setEndDate(existing.endDate ? new Date(existing.endDate) : null);
     setTotalCount(existing.totalCount ? String(existing.totalCount) : "");
+    setPaidBefore(String(existing.paidCount ?? 0));
   }, [existing, f.lang]);
-
-  const changeType = (t: RecType) => {
-    setType(t);
-    setCategoryId("");
-  };
 
   const submit = () => {
     if (!title.trim()) {
@@ -85,23 +62,25 @@ export default function RecurringFormScreen({ params }: { params?: Record<string
       toast.error(f.t("common.required"));
       return;
     }
-    if (!accountId) {
-      toast.error(f.t("common.required"));
+    const tc = parseAmountInput(toEnDigits(totalCount));
+    if (tc < 1) {
+      toast.error(f.t("rec.totalCountRequired"));
       return;
     }
-    const tc = parseAmountInput(toEnDigits(totalCount));
+    const pb = Math.max(0, parseAmountInput(toEnDigits(paidBefore)));
+    if (pb > tc) {
+      toast.error(f.t("rec.paidExceedsTotal"));
+      return;
+    }
     saveRecurring.mutate(
       {
         id,
         title: title.trim(),
-        type,
         amount: amt,
-        accountId,
-        categoryId: categoryId || null,
         frequency,
         startDate: startDate.toISOString(),
-        endDate: endDate ? endDate.toISOString() : null,
-        totalCount: tc > 0 ? tc : null,
+        totalCount: tc,
+        paidCount: pb,
       },
       {
         onSuccess: () => {
@@ -129,23 +108,13 @@ export default function RecurringFormScreen({ params }: { params?: Record<string
       <ScreenHeader title={id ? f.t("common.edit") : f.t("rec.add")} onBack={back} />
 
       <div className="flex-1 overflow-y-auto app-screen-scroll px-4 pb-8 pt-2 flex flex-col gap-3">
-        {/* title + type + amount */}
+        {/* title + amount */}
         <div className="bg-card rounded-2xl card-soft p-4 flex flex-col gap-3">
           <Field label={f.t("rec.titleField")} required>
             <PillInput
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               placeholder={f.t("rec.titlePlaceholder")}
-            />
-          </Field>
-          <Field label={f.t("rec.recType")}>
-            <SegmentedTabs<RecType>
-              value={type}
-              onChange={changeType}
-              options={[
-                { value: "EXPENSE", label: f.t("tx.expense") },
-                { value: "INCOME", label: f.t("tx.income") },
-              ]}
             />
           </Field>
           <Field label={f.t("common.amount")} required>
@@ -165,7 +134,7 @@ export default function RecurringFormScreen({ params }: { params?: Record<string
           </Field>
         </div>
 
-        {/* schedule */}
+        {/* schedule — تناوب stays as-is */}
         <div className="bg-card rounded-2xl card-soft p-4 flex flex-col gap-3">
           <Field label={f.t("rec.frequency")} required>
             <SegmentedTabs<Frequency>
@@ -182,28 +151,7 @@ export default function RecurringFormScreen({ params }: { params?: Record<string
           <Field label={f.t("rec.startDate")} required>
             <JalaliDatePicker value={startDate} onChange={setStartDate} />
           </Field>
-          <Field label={`${f.t("rec.endDate")} (${f.t("common.optional")})`}>
-            <div className="flex items-center gap-2">
-              <div className="flex-1">
-                <JalaliDatePicker
-                  value={endDate}
-                  onChange={setEndDate}
-                  placeholder={f.t("rec.endDate")}
-                />
-              </div>
-              {endDate && (
-                <button
-                  type="button"
-                  onClick={() => setEndDate(null)}
-                  aria-label="clear end date"
-                  className="w-10 h-10 rounded-xl bg-secondary text-muted-foreground flex items-center justify-center hover:text-foreground transition-colors shrink-0"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              )}
-            </div>
-          </Field>
-          <Field label={`${f.t("rec.totalCount")} (${f.t("common.optional")})`}>
+          <Field label={f.t("rec.totalCount")} required>
             <PillInput
               inputMode="numeric"
               className="num-input"
@@ -211,44 +159,28 @@ export default function RecurringFormScreen({ params }: { params?: Record<string
               onChange={(e) =>
                 setTotalCount(formatAmountInput(toEnDigits(e.target.value), f.lang))
               }
-              placeholder={f.t("common.optional")}
+              placeholder={f.t("rec.totalCountPlaceholder")}
             />
           </Field>
         </div>
 
-        {/* account + category */}
+        {/* payment status — replaces the old account picker */}
         <div className="bg-card rounded-2xl card-soft p-4 flex flex-col gap-3">
-          <Field label={f.t("tx.account")} required>
-            <Select value={accountId || ""} onValueChange={setAccountId}>
-              <SelectTrigger className="h-12 rounded-2xl bg-card border-border text-[14px]">
-                <SelectValue placeholder={f.t("common.select")} />
-              </SelectTrigger>
-              <SelectContent className="rounded-2xl bg-card">
-                {accounts.map((a) => (
-                  <SelectItem key={a.id} value={a.id} className="text-[13px]">
-                    {a.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+          <p className="text-[13px] font-bold text-foreground">{f.t("rec.payStatus")}</p>
+          <Field label={f.t("rec.paidBefore")}>
+            <PillInput
+              inputMode="numeric"
+              className="num-input"
+              value={paidBefore}
+              onChange={(e) =>
+                setPaidBefore(formatAmountInput(toEnDigits(e.target.value), f.lang))
+              }
+            />
           </Field>
-          <Field label={`${f.t("tx.category")} (${f.t("common.optional")})`}>
-            <Select value={categoryId || "none"} onValueChange={(v) => setCategoryId(v === "none" ? "" : v)}>
-              <SelectTrigger className="h-12 rounded-2xl bg-card border-border text-[14px]">
-                <SelectValue placeholder={f.t("common.select")} />
-              </SelectTrigger>
-              <SelectContent className="rounded-2xl bg-card">
-                <SelectItem value="none" className="text-[13px]">
-                  {f.t("common.optional")}
-                </SelectItem>
-                {categories.map((c) => (
-                  <SelectItem key={c.id} value={c.id} className="text-[13px]">
-                    {c.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </Field>
+          <p className="text-[11px] text-muted-foreground flex items-start gap-1.5">
+            <Wallet className="w-3.5 h-3.5 shrink-0 mt-0.5 text-primary" />
+            {f.t("rec.noAccountingHint")}
+          </p>
         </div>
 
         <GradientButton onClick={submit} disabled={saveRecurring.isPending} className="mt-1">

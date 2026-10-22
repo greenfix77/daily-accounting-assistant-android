@@ -32,6 +32,7 @@ import DebtsScreen from "./screens/DebtsScreen";
 import DebtFormScreen from "./screens/DebtFormScreen";
 import RecurringScreen from "./screens/RecurringScreen";
 import RecurringFormScreen from "./screens/RecurringFormScreen";
+import RecurringDetailsScreen from "./screens/RecurringDetailsScreen";
 import SavingsScreen from "./screens/SavingsScreen";
 import GoalFormScreen from "./screens/GoalFormScreen";
 import PlanningScreen from "./screens/PlanningScreen";
@@ -59,6 +60,7 @@ const SCREENS: Record<string, React.ComponentType<{ params?: Record<string, unkn
   "debt-form": DebtFormScreen,
   recurring: RecurringScreen,
   "recurring-form": RecurringFormScreen,
+  "recurring-details": RecurringDetailsScreen,
   savings: SavingsScreen,
   "goal-form": GoalFormScreen,
   planning: PlanningScreen,

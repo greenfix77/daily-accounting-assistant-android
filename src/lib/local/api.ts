@@ -211,7 +211,7 @@ function profileDTO(p: ProfileRow): ProfileDTO {
   };
 }
 
-// ── Recurring nextDue (mirror core.ts) ───────────────────────
+// ── Installments (اقساط) — pure payment tracker, no accounting ──
 
 function stepDate(d: Date, frequency: string): Date {
   switch (frequency) {
@@ -226,18 +226,51 @@ function stepDate(d: Date, frequency: string): Date {
   }
 }
 
-/** Earliest occurrence of the schedule strictly after max(lastPaidAt, startDate−1s). */
-function nextDue(r: {
-  frequency: string;
-  startDate: string;
-  endDate: string | null;
-  totalCount: number | null;
-  paidCount: number;
-  lastPaidAt: string | null;
-  isActive: boolean;
-}): Date | null {
+/** Due date of installment #n (1-based) = startDate + (n−1) × frequency. */
+function installmentDueDate(
+  r: { frequency: string; startDate: string },
+  n: number,
+): Date {
+  let cur = new Date(r.startDate);
+  for (let i = 1; i < n && i < 5000; i++) cur = stepDate(cur, r.frequency);
+  return cur;
+}
+
+/** Backward-compat: synthesize paidMap for legacy rows that only had paidCount. */
+function normalizePaidMap(r: RecurringRow): Record<string, string> {
+  if (r.paidMap) return r.paidMap;
+  const map: Record<string, string> = {};
+  const total = r.totalCount ?? Infinity;
+  const cnt = Math.min(r.paidCount ?? 0, total);
+  for (let n = 1; n <= cnt && n < 5000; n++) {
+    map[String(n)] = installmentDueDate(r, n).toISOString();
+  }
+  return map;
+}
+
+/** Keep paidCount / lastPaidAt consistent with paidMap. */
+function syncPaidFields(row: RecurringRow): RecurringRow {
+  const map = row.paidMap ?? {};
+  const dates = Object.values(map).sort();
+  return {
+    ...row,
+    paidCount: Object.keys(map).length,
+    lastPaidAt: dates.length ? dates[dates.length - 1] : null,
+  };
+}
+
+/** First unpaid installment's due date (null = finished or paused). */
+function nextDue(r: RecurringRow): Date | null {
   if (!r.isActive) return null;
-  if (r.totalCount != null && r.paidCount >= r.totalCount) return null;
+  const total = r.totalCount;
+  if (total != null) {
+    const paid = r.paidMap ?? {};
+    for (let n = 1; n <= total && n < 5000; n++) {
+      if (!paid[String(n)]) return installmentDueDate(r, n);
+    }
+    return null;
+  }
+  // legacy rows without a total count: first occurrence after max(lastPaidAt, startDate−1s)
   const last = r.lastPaidAt ? ms(r.lastPaidAt) : -Infinity;
   const reference = Math.max(last, ms(r.startDate) - 1000);
   let cur = new Date(r.startDate);
@@ -251,29 +284,23 @@ function nextDue(r: {
   return cur;
 }
 
-function recurDTO(r: RecurringRow, accMap: AccMap, catMap: CatMap): RecurringDTO {
+function recurDTO(r: RecurringRow): RecurringDTO {
+  const paidMap = normalizePaidMap(r);
+  const paidCount = Object.keys(paidMap).length;
   const nd = nextDue(r);
-  const account = accMap.get(r.accountId);
-  const category = r.categoryId ? catMap.get(r.categoryId) : undefined;
+  const paidDates = Object.values(paidMap).sort();
   return {
     id: r.id,
     title: r.title,
-    type: r.type as RecurringDTO["type"],
     amount: r.amount,
-    accountId: r.accountId,
-    accountName: account?.name ?? "",
-    categoryId: r.categoryId,
-    categoryName: category?.name ?? null,
-    categoryIcon: category?.icon ?? null,
-    categoryColor: category?.color ?? null,
     frequency: r.frequency as RecurringDTO["frequency"],
     startDate: r.startDate,
-    endDate: r.endDate,
     totalCount: r.totalCount,
-    paidCount: r.paidCount,
-    lastPaidAt: r.lastPaidAt,
+    paidCount,
+    lastPaidAt: paidDates.length ? paidDates[paidDates.length - 1] : r.lastPaidAt,
     isActive: r.isActive,
     nextDue: nd ? nd.toISOString() : null,
+    paidMap,
   };
 }
 
@@ -841,10 +868,9 @@ export async function deleteAccount(id: string): Promise<{ ok: boolean }> {
   if (count > 0) {
     throw new ApiError("این حساب تراکنش دارد و قابل حذف نیست", 409);
   }
-  // mirror Prisma cascades: recurring → Cascade, transactions.toAccount → SetNull
-  await d.transaction("rw", d.accounts, d.recurrings, d.transactions, async () => {
-    const recs = (await d.recurrings.toArray()).filter((r) => r.accountId === id); // accountId is not an index — in-memory (per prescribed schema)
-    await d.recurrings.bulkDelete(recs.map((r) => r.id));
+  // mirror Prisma cascade: transactions.toAccount → SetNull
+  // (اقساط are no longer account-bound — deleting an account never touches them)
+  await d.transaction("rw", d.accounts, d.transactions, async () => {
     const toTxs = await d.transactions.where("toAccountId").equals(id).toArray();
     await d.transactions.bulkPut(toTxs.map((t) => ({ ...t, toAccountId: null })));
     await d.accounts.delete(id);
@@ -1221,15 +1247,15 @@ export async function addDebtPayment(body: {
 }
 
 // ═════════════════════════════════════════════════════════════
-// Recurring  (GET/POST /api/recurring, [id], [id]/pay)
+// Installments (اقساط)  (GET/POST /api/recurring, [id]) — pure tracker
 // ═════════════════════════════════════════════════════════════
 
 export async function getRecurring(): Promise<RecurringDTO[]> {
   const d = db();
-  const [rows, { accMap, catMap }] = await Promise.all([d.recurrings.toArray(), loadMaps(d)]);
+  const rows = await d.recurrings.toArray();
   return rows
     .sort((a, b) => ms(b.createdAt) - ms(a.createdAt))
-    .map((r) => recurDTO(r, accMap, catMap));
+    .map((r) => recurDTO(r));
 }
 
 export async function saveRecurring(
@@ -1237,63 +1263,56 @@ export async function saveRecurring(
 ): Promise<RecurringDTO> {
   const d = db();
   const { id, ...body } = payload;
-  const { accMap, catMap } = await loadMaps(d);
 
   if (!id) {
     // ── POST ──
     const title = toStr(body.title)?.trim();
     if (!title) throw new ApiError("عنوان الزامی است", 400);
-    const type = toStr(body.type) ?? "EXPENSE";
-    if (!REC_TYPES.includes(type)) throw new ApiError("نوع باید EXPENSE یا INCOME باشد", 400);
     const amount = toNum(body.amount);
     if (amount === undefined || amount <= 0)
       throw new ApiError("مبلغ باید بزرگ‌تر از صفر باشد", 400);
 
-    const accountId = toStr(body.accountId) ?? "";
-    if (!accountId) throw new ApiError("حساب الزامی است", 400);
-    const account = await d.accounts.get(accountId);
-    if (!account) throw new ApiError("حساب یافت نشد", 400);
-
-    let categoryId: string | null = null;
-    if (typeof body.categoryId === "string" && body.categoryId) {
-      const category = await d.categories.get(body.categoryId);
-      if (!category) throw new ApiError("دسته‌بندی یافت نشد", 400);
-      categoryId = category.id;
-    }
-
     const frequency = toStr(body.frequency) ?? "MONTHLY";
     if (!FREQUENCIES.includes(frequency)) throw new ApiError("تناوب نامعتبر است", 400);
 
-    let totalCount: number | null = null;
-    if (body.totalCount !== undefined && body.totalCount !== null && body.totalCount !== "") {
-      const tc = toInt(body.totalCount);
-      if (tc === undefined || tc < 1) throw new ApiError("تعداد کل باید حداقل ۱ باشد", 400);
-      totalCount = tc;
-    }
+    const totalCount = toInt(body.totalCount);
+    if (totalCount === undefined || totalCount < 1)
+      throw new ApiError("تعداد اقساط باید حداقل ۱ باشد", 400);
 
-    const created: RecurringRow = {
+    const paidBefore = Math.max(0, toInt(body.paidCount) ?? 0);
+    if (paidBefore > totalCount)
+      throw new ApiError("تعداد پرداخت‌شده نمی‌تواند بیشتر از تعداد اقساط باشد", 400);
+
+    // اقساط has no accounting impact → no account/category/transactions
+    const skeleton: RecurringRow = {
       id: newId(),
       title,
-      type,
+      type: "EXPENSE",
       amount,
-      accountId,
-      categoryId,
+      accountId: "",
+      categoryId: null,
       frequency,
       startDate: (toDt(body.startDate) ?? new Date()).toISOString(),
-      endDate: toDt(body.endDate)?.toISOString() ?? null,
+      endDate: null,
       totalCount,
       paidCount: 0,
       lastPaidAt: null,
       isActive: true,
       createdAt: new Date().toISOString(),
     };
+    // pre-existing payments (تعداد پرداخت‌های از قبل) default to their due dates
+    const map: Record<string, string> = {};
+    for (let n = 1; n <= paidBefore; n++) {
+      map[String(n)] = installmentDueDate(skeleton, n).toISOString();
+    }
+    const created = syncPaidFields({ ...skeleton, paidMap: map });
     await d.recurrings.add(created);
-    return recurDTO(created, accMap, catMap);
+    return recurDTO(created);
   }
 
   // ── PATCH ──
   const existing = await d.recurrings.get(id);
-  if (!existing) throw new ApiError("قسط/درآمد تکرارشونده یافت نشد", 404);
+  if (!existing) throw new ApiError("قسط یافت نشد", 404);
 
   const data: Partial<RecurringRow> = {};
   if (body.title !== undefined) {
@@ -1301,32 +1320,11 @@ export async function saveRecurring(
     if (!title) throw new ApiError("عنوان الزامی است", 400);
     data.title = title;
   }
-  if (body.type !== undefined) {
-    const type = toStr(body.type) ?? "";
-    if (!REC_TYPES.includes(type)) throw new ApiError("نوع باید EXPENSE یا INCOME باشد", 400);
-    data.type = type;
-  }
   if (body.amount !== undefined) {
     const amount = toNum(body.amount);
     if (amount === undefined || amount <= 0)
       throw new ApiError("مبلغ باید بزرگ‌تر از صفر باشد", 400);
     data.amount = amount;
-  }
-  if (body.accountId !== undefined) {
-    const accountId = toStr(body.accountId) ?? "";
-    if (!accountId) throw new ApiError("حساب الزامی است", 400);
-    const account = await d.accounts.get(accountId);
-    if (!account) throw new ApiError("حساب یافت نشد", 400);
-    data.accountId = accountId;
-  }
-  if (body.categoryId !== undefined) {
-    if (body.categoryId === null || body.categoryId === "") {
-      data.categoryId = null;
-    } else if (typeof body.categoryId === "string") {
-      const category = await d.categories.get(body.categoryId);
-      if (!category) throw new ApiError("دسته‌بندی یافت نشد", 400);
-      data.categoryId = category.id;
-    }
   }
   if (body.frequency !== undefined) {
     const frequency = toStr(body.frequency) ?? "";
@@ -1338,84 +1336,85 @@ export async function saveRecurring(
     if (!startDate) throw new ApiError("تاریخ شروع نامعتبر است", 400);
     data.startDate = startDate.toISOString();
   }
-  if (body.endDate !== undefined) data.endDate = toDt(body.endDate)?.toISOString() ?? null;
   if (body.totalCount !== undefined) {
-    if (body.totalCount === null || body.totalCount === "") {
-      data.totalCount = null;
-    } else {
-      const tc = toInt(body.totalCount);
-      if (tc === undefined || tc < 1) throw new ApiError("تعداد کل باید حداقل ۱ باشد", 400);
-      data.totalCount = tc;
-    }
+    const tc = toInt(body.totalCount);
+    if (tc === undefined || tc < 1) throw new ApiError("تعداد اقساط باید حداقل ۱ باشد", 400);
+    data.totalCount = tc;
   }
   if (body.isActive !== undefined) data.isActive = Boolean(body.isActive);
 
-  const updated: RecurringRow = { ...existing, ...data };
-  await d.recurrings.put(updated);
-  return recurDTO(updated, accMap, catMap);
+  let merged: RecurringRow = { ...existing, ...data };
+
+  // «تعداد پرداخت‌های انجام‌شده از قبل» — rebuild paidMap for first N installments
+  if (body.paidCount !== undefined) {
+    const paidBefore = Math.max(0, toInt(body.paidCount) ?? 0);
+    if (merged.totalCount != null && paidBefore > merged.totalCount)
+      throw new ApiError("تعداد پرداخت‌شده نمی‌تواند بیشتر از تعداد اقساط باشد", 400);
+    const prevMap = normalizePaidMap(existing);
+    const map: Record<string, string> = {};
+    for (let n = 1; n <= paidBefore; n++) {
+      // keep manual payment dates of already-paid installments; default to due date
+      map[String(n)] = prevMap[String(n)] ?? installmentDueDate(merged, n).toISOString();
+    }
+    merged = { ...merged, paidMap: map };
+  }
+
+  // if totalCount shrank, drop payments beyond the schedule
+  if (merged.totalCount != null) {
+    const map = { ...(merged.paidMap ?? {}) };
+    let dropped = false;
+    for (const k of Object.keys(map)) {
+      if (parseInt(k, 10) > merged.totalCount) {
+        delete map[k];
+        dropped = true;
+      }
+    }
+    if (dropped) merged = { ...merged, paidMap: map };
+  }
+
+  merged = syncPaidFields(merged);
+  await d.recurrings.put(merged);
+  return recurDTO(merged);
 }
 
 export async function deleteRecurring(id: string): Promise<{ ok: boolean }> {
   const d = db();
   const existing = await d.recurrings.get(id);
-  if (!existing) throw new ApiError("قسط/درآمد تکرارشونده یافت نشد", 404);
+  if (!existing) throw new ApiError("قسط یافت نشد", 404);
   await d.recurrings.delete(id);
   return { ok: true };
 }
 
-/** POST /api/recurring/[id]/pay {date?} → create transaction + advance schedule. */
-export async function payRecurring(body: {
+/**
+ * Toggle a single installment's paid state (the tick in the schedule view).
+ * No transaction is created — اقساط has no accounting impact.
+ * paidAt is optional: defaults to the installment's scheduled due date.
+ */
+export async function setInstallmentPaid(body: {
   id: string;
-  date?: string;
-}): Promise<{ ok: boolean; transaction: TransactionDTO | null; recurring: RecurringDTO | null }> {
+  n: number;
+  paid: boolean;
+  paidAt?: string;
+}): Promise<{ ok: boolean; recurring: RecurringDTO }> {
   const d = db();
-  const recurring = await d.recurrings.get(body.id);
-  if (!recurring) throw new ApiError("قسط/درآمد تکرارشونده یافت نشد", 404);
+  const existing = await d.recurrings.get(body.id);
+  if (!existing) throw new ApiError("قسط یافت نشد", 404);
 
-  const nd = nextDue(recurring);
-  if (!nd) {
-    throw new ApiError("این قسط تمام شده یا غیرفعال است", 409);
+  const total = existing.totalCount ?? 0;
+  if (!Number.isInteger(body.n) || body.n < 1 || (total > 0 && body.n > total))
+    throw new ApiError("شماره قسط نامعتبر است", 400);
+
+  const map = { ...normalizePaidMap(existing) };
+  if (body.paid) {
+    const paidAt = body.paidAt ? toDt(body.paidAt) : null;
+    map[String(body.n)] = (paidAt ?? installmentDueDate(existing, body.n)).toISOString();
+  } else {
+    delete map[String(body.n)];
   }
 
-  const date = toDt(body.date) ?? new Date();
-
-  // requested date falls inside an already-paid period → reject
-  if (recurring.lastPaidAt && date.getTime() < nd.getTime()) {
-    throw new ApiError("این دوره قبلاً پرداخت شده است", 409);
-  }
-
-  const created: TransactionRow = {
-    id: newId(),
-    type: recurring.type,
-    amount: recurring.amount,
-    title: recurring.title,
-    description: null,
-    notes: null,
-    receiptUrl: null,
-    accountId: recurring.accountId,
-    toAccountId: null,
-    categoryId: recurring.categoryId,
-    debtId: null,
-    recurringId: recurring.id,
-    date: date.toISOString(),
-    createdAt: new Date().toISOString(),
-  };
-  const updated: RecurringRow = {
-    ...recurring,
-    paidCount: recurring.paidCount + 1,
-    lastPaidAt: date.toISOString(),
-  };
-  await d.transaction("rw", d.transactions, d.recurrings, async () => {
-    await d.transactions.add(created);
-    await d.recurrings.put(updated);
-  });
-
-  const { accMap, catMap } = await loadMaps(d);
-  return {
-    ok: true,
-    transaction: txDTO(created, accMap, catMap),
-    recurring: recurDTO(updated, accMap, catMap),
-  };
+  const updated = syncPaidFields({ ...existing, paidMap: map });
+  await d.recurrings.put(updated);
+  return { ok: true, recurring: recurDTO(updated) };
 }
 
 // ═════════════════════════════════════════════════════════════

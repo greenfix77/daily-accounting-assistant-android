@@ -24,6 +24,7 @@ export type ScreenId =
   | "debt-form"
   | "recurring"
   | "recurring-form"
+  | "recurring-details"
   | "savings"
   | "goal-form"
   | "reminders"

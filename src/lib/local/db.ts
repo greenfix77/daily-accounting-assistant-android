@@ -104,16 +104,18 @@ export interface DebtPaymentRow {
 export interface RecurringRow {
   id: string;
   title: string;
-  type: string; // EXPENSE | INCOME
+  type: string; // legacy only ("EXPENSE" | "INCOME") — اقساط has no accounting impact
   amount: number;
-  accountId: string;
-  categoryId: string | null;
+  accountId: string; // legacy only — new rows store ""
+  categoryId: string | null; // legacy only — new rows store null
   frequency: string; // DAILY | WEEKLY | MONTHLY | YEARLY
-  startDate: string; // ISO
-  endDate: string | null; // ISO
+  startDate: string; // ISO — due date of installment #1
+  endDate: string | null; // legacy only — new rows store null
   totalCount: number | null;
-  paidCount: number;
-  lastPaidAt: string | null; // ISO
+  paidCount: number; // synced with paidMap size
+  lastPaidAt: string | null; // ISO — max of paidMap values
+  /** installment number (as string, 1-based) → actual payment date (ISO) */
+  paidMap?: Record<string, string>;
   isActive: boolean;
   createdAt: string; // ISO
 }

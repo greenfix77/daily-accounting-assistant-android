@@ -116,25 +116,27 @@ export interface DebtDTO {
   payments: DebtPaymentDTO[];
 }
 
+/**
+ * اقساط — a pure payment-tracker (no accounting impact):
+ * every installment is computed from startDate + frequency, and
+ * `paidMap` records which installment numbers are already paid
+ * (key = 1-based installment number, value = actual payment date ISO,
+ * which defaults to the scheduled due date when not provided).
+ */
 export interface RecurringDTO {
   id: string;
   title: string;
-  type: "INCOME" | "EXPENSE";
   amount: number;
-  accountId: string;
-  accountName: string;
-  categoryId: string | null;
-  categoryName: string | null;
-  categoryIcon: string | null;
-  categoryColor: string | null;
   frequency: Frequency;
   startDate: string;
-  endDate: string | null;
   totalCount: number | null;
   paidCount: number;
   lastPaidAt: string | null;
   isActive: boolean;
+  /** date of the first unpaid installment (null = finished or paused) */
   nextDue: string | null;
+  /** installment number (as string) → payment date (ISO) */
+  paidMap: Record<string, string>;
 }
 
 export interface SavingsDepositDTO {

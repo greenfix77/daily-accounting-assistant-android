@@ -37,6 +37,7 @@ import {
   saveRecurring,
   saveReminder,
   saveTransaction,
+  setInstallmentPaid,
   toggleReminder as toggleReminderLocal,
   updateSettings as updateSettingsLocal,
 } from "./local/api";
@@ -270,14 +271,14 @@ export function useDeleteRecurring() {
   });
 }
 
-export function usePayRecurring() {
+export function useSetInstallmentPaid() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, date }: { id: string; date?: string }) => payRecurring({ id, date }),
+    mutationFn: (body: { id: string; n: number; paid: boolean; paidAt?: string }) =>
+      setInstallmentPaid(body),
     onSuccess: () => qc.invalidateQueries(),
   });
 }
-
 // ── Savings ──────────────────────────────────────────────────
 export function useSavings() {
   return useQuery<SavingsGoalDTO[]>({
