@@ -217,3 +217,63 @@ export interface ReportsDTO {
 export interface ScreenParams {
   [key: string]: unknown;
 }
+
+// ── Wallets (کیف پول) ────────────────────────────────────────
+
+export type WalletEntryType = "IN" | "OUT";
+
+/** کیف پول — a standalone money pocket with its own balance and optional spending ceiling. */
+export interface WalletDTO {
+  id: string;
+  title: string;
+  /** مصرف ceiling (سقف) — null = unlimited */
+  ceiling: number | null;
+  /** account ids linked to this wallet (informational) */
+  linkedAccountIds: string[];
+  /** sum(IN) - sum(OUT) */
+  balance: number;
+  totalIn: number;
+  totalOut: number;
+  entryCount: number;
+  lastEntryAt: string | null;
+  createdAt: string;
+}
+
+export interface WalletEntryDTO {
+  id: string;
+  walletId: string;
+  type: WalletEntryType;
+  amount: number;
+  note: string | null;
+  date: string; // ISO
+  createdAt: string;
+}
+
+export interface WalletLinkedAccountDTO {
+  id: string;
+  name: string;
+  type: string;
+  balance: number;
+  walletId: string;
+  walletTitle: string;
+}
+
+export interface WalletAlertDTO {
+  walletId: string;
+  walletTitle: string;
+  level: "WARN" | "OVER";
+  spent: number;
+  ceiling: number;
+  percent: number;
+}
+
+export interface WalletsOverviewDTO {
+  wallets: WalletDTO[];
+  totalBalance: number;
+  totalIn: number;
+  totalOut: number;
+  walletCount: number;
+  alerts: WalletAlertDTO[];
+  linkedAccounts: WalletLinkedAccountDTO[];
+  recentEntries: (WalletEntryDTO & { walletTitle: string })[];
+}

@@ -149,6 +149,24 @@ export interface ReminderRow {
   createdAt: string; // ISO
 }
 
+export interface WalletRow {
+  id: string;
+  title: string;
+  ceiling: number | null; // مصرف ceiling (سقف) — null = unlimited
+  linkedAccountIds: string[]; // informational links to accounts
+  createdAt: string; // ISO
+}
+
+export interface WalletEntryRow {
+  id: string;
+  walletId: string;
+  type: string; // IN | OUT
+  amount: number;
+  note: string | null;
+  date: string; // ISO
+  createdAt: string; // ISO
+}
+
 // ── Dexie database ───────────────────────────────────────────
 
 export class HesabyarDB extends Dexie {
@@ -163,6 +181,8 @@ export class HesabyarDB extends Dexie {
   savingsGoals!: Table<SavingsGoalRow, string>;
   savingsDeposits!: Table<SavingsDepositRow, string>;
   reminders!: Table<ReminderRow, string>;
+  wallets!: Table<WalletRow, string>;
+  walletEntries!: Table<WalletEntryRow, string>;
 
   constructor() {
     super("hesabyar-reyra");
@@ -179,6 +199,10 @@ export class HesabyarDB extends Dexie {
       savingsGoals: "id",
       savingsDeposits: "id, goalId, date",
       reminders: "id, date, isDone",
+    });
+    this.version(2).stores({
+      wallets: "id",
+      walletEntries: "id, walletId, date",
     });
   }
 }

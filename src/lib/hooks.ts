@@ -40,6 +40,12 @@ import {
   setInstallmentPaid,
   toggleReminder as toggleReminderLocal,
   updateSettings as updateSettingsLocal,
+  deleteWallet,
+  deleteWalletEntry,
+  getWalletEntries,
+  getWalletsOverview,
+  saveWallet,
+  saveWalletEntry,
 } from "./local/api";
 import { isBrowser } from "./local/db";
 import type {
@@ -57,6 +63,8 @@ import type {
   TransactionDTO,
   TxType,
   ReportPeriod,
+  WalletEntryDTO,
+  WalletsOverviewDTO,
 } from "./types";
 
 // All data lives in the client-local database (IndexedDB via Dexie).
@@ -276,6 +284,55 @@ export function useSetInstallmentPaid() {
   return useMutation({
     mutationFn: (body: { id: string; n: number; paid: boolean; paidAt?: string }) =>
       setInstallmentPaid(body),
+    onSuccess: () => qc.invalidateQueries(),
+  });
+}
+
+// ── Wallets ──────────────────────────────────────────────────
+export function useWalletsOverview() {
+  return useQuery<WalletsOverviewDTO>({
+    queryKey: ["wallets-overview"],
+    queryFn: () => getWalletsOverview(),
+    enabled: isBrowser,
+  });
+}
+
+export function useSaveWallet() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: Record<string, unknown> & { id?: string }) => saveWallet(payload),
+    onSuccess: () => qc.invalidateQueries(),
+  });
+}
+
+export function useDeleteWallet() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => deleteWallet(id),
+    onSuccess: () => qc.invalidateQueries(),
+  });
+}
+
+export function useWalletEntries(walletId?: string) {
+  return useQuery<WalletEntryDTO[]>({
+    queryKey: ["wallet-entries", walletId],
+    queryFn: () => getWalletEntries(walletId as string),
+    enabled: isBrowser && !!walletId,
+  });
+}
+
+export function useSaveWalletEntry() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: Record<string, unknown> & { id?: string }) => saveWalletEntry(payload),
+    onSuccess: () => qc.invalidateQueries(),
+  });
+}
+
+export function useDeleteWalletEntry() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => deleteWalletEntry(id),
     onSuccess: () => qc.invalidateQueries(),
   });
 }

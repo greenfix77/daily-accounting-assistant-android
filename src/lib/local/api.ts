@@ -30,6 +30,8 @@ import {
   type SavingsDepositRow,
   type SavingsGoalRow,
   type TransactionRow,
+  type WalletEntryRow,
+  type WalletRow,
 } from "./db";
 import type {
   AccountDTO,
@@ -49,6 +51,11 @@ import type {
   SavingsGoalDTO,
   TransactionDTO,
   UpcomingDTO,
+  WalletAlertDTO,
+  WalletDTO,
+  WalletEntryDTO,
+  WalletLinkedAccountDTO,
+  WalletsOverviewDTO,
 } from "../types";
 
 // ── guards & shared helpers ──────────────────────────────────
@@ -2072,12 +2079,14 @@ export interface BackupFile {
   savingsGoals: SavingsGoalRow[];
   savingsDeposits: SavingsDepositRow[];
   reminders: ReminderRow[];
+  wallets: WalletRow[];
+  walletEntries: WalletEntryRow[];
   exportedAt: string;
 }
 
 export async function getBackup(): Promise<BackupFile> {
   const d = db();
-  const [profile, accounts, categories, transactions, budgets, debts, debtPayments, recurring, savingsGoals, savingsDeposits, reminders] =
+  const [profile, accounts, categories, transactions, budgets, debts, debtPayments, recurring, savingsGoals, savingsDeposits, reminders, wallets, walletEntries] =
     await Promise.all([
       d.profile.toArray(),
       d.accounts.toArray(),
@@ -2090,6 +2099,8 @@ export async function getBackup(): Promise<BackupFile> {
       d.savingsGoals.toArray(),
       d.savingsDeposits.toArray(),
       d.reminders.toArray(),
+      d.wallets.toArray(),
+      d.walletEntries.toArray(),
     ]);
 
   return {
@@ -2104,6 +2115,8 @@ export async function getBackup(): Promise<BackupFile> {
     savingsGoals,
     savingsDeposits,
     reminders,
+    wallets,
+    walletEntries,
     exportedAt: new Date().toISOString(),
   };
 }
@@ -2168,6 +2181,8 @@ export async function restoreBackup(body: unknown): Promise<{ ok: boolean; count
   const savingsGoals = asRows(pick(b.savingsGoals, ["id", "name", "targetAmount", "targetDate", "color", "icon", "createdAt"], ["targetDate", "createdAt"]));
   const savingsDeposits = pick(b.savingsDeposits, ["id", "goalId", "amount", "date", "notes"], ["date"]);
   const reminders = asRows(pick(b.reminders, ["id", "title", "type", "date", "time", "repeat", "isDone", "createdAt"], ["date", "createdAt"]));
+  const wallets = pick(b.wallets, ["id", "title", "ceiling", "linkedAccountIds", "createdAt"], ["createdAt"]);
+  const walletEntries = pick(b.walletEntries, ["id", "walletId", "type", "amount", "note", "date", "createdAt"], ["date", "createdAt"]);
 
   const counts = (await d.transaction(
     "rw",
@@ -2182,9 +2197,13 @@ export async function restoreBackup(body: unknown): Promise<{ ok: boolean; count
       d.savingsGoals,
       d.savingsDeposits,
       d.reminders,
+      d.wallets,
+      d.walletEntries,
     ],
     async () => {
       // wipe — FK-safe order
+      await d.walletEntries.clear();
+      await d.wallets.clear();
       await d.debtPayments.clear();
       await d.savingsDeposits.clear();
       await d.transactions.clear();
@@ -2207,7 +2226,9 @@ export async function restoreBackup(body: unknown): Promise<{ ok: boolean; count
         | "recurrings"
         | "savingsGoals"
         | "savingsDeposits"
-        | "reminders";
+        | "reminders"
+        | "wallets"
+        | "walletEntries";
       const insert = async (name: TableName, rows: Row[]): Promise<number> => {
         if (!rows.length) return 0;
         await (d[name] as unknown as import("dexie").Table<Row, string>).bulkAdd(rows);
@@ -2224,6 +2245,8 @@ export async function restoreBackup(body: unknown): Promise<{ ok: boolean; count
         savingsGoals: await insert("savingsGoals", savingsGoals),
         savingsDeposits: await insert("savingsDeposits", savingsDeposits),
         reminders: await insert("reminders", reminders),
+        wallets: await insert("wallets", wallets),
+        walletEntries: await insert("walletEntries", walletEntries),
       } as Record<string, number>;
     },
   ));
@@ -2265,4 +2288,296 @@ export async function restoreBackup(body: unknown): Promise<{ ok: boolean; count
   }
 
   return { ok: true, counts };
+}
+
+// ═════════════════════════════════════════════════════════════
+// Wallets (کیف پول) — GET/POST /api/wallets, [id], [id]/entries
+// Standalone money pockets with own balance + spending ceiling.
+// No accounting impact (like اقساط).
+// ═════════════════════════════════════════════════════════════
+
+const WALLET_ENTRY_TYPES = ["IN", "OUT"];
+
+function walletDTO(w: WalletRow, entries: WalletEntryRow[]): WalletDTO {
+  let totalIn = 0;
+  let totalOut = 0;
+  let lastEntryAt: string | null = null;
+  for (const e of entries) {
+    if (e.type === "IN") totalIn += e.amount;
+    else totalOut += e.amount;
+    if (!lastEntryAt || e.date > lastEntryAt) lastEntryAt = e.date;
+  }
+  return {
+    id: w.id,
+    title: w.title,
+    ceiling: w.ceiling,
+    linkedAccountIds: Array.isArray(w.linkedAccountIds) ? w.linkedAccountIds : [],
+    balance: totalIn - totalOut,
+    totalIn,
+    totalOut,
+    entryCount: entries.length,
+    lastEntryAt,
+    createdAt: w.createdAt,
+  };
+}
+
+function walletEntryDTO(e: WalletEntryRow): WalletEntryDTO {
+  return {
+    id: e.id,
+    walletId: e.walletId,
+    type: e.type as WalletEntryDTO["type"],
+    amount: e.amount,
+    note: e.note,
+    date: e.date,
+    createdAt: e.createdAt,
+  };
+}
+
+export async function getWallets(): Promise<WalletDTO[]> {
+  const d = db();
+  const [rows, entries] = await Promise.all([d.wallets.toArray(), d.walletEntries.toArray()]);
+  const byWallet = new Map<string, WalletEntryRow[]>();
+  for (const e of entries) {
+    const arr = byWallet.get(e.walletId);
+    if (arr) arr.push(e);
+    else byWallet.set(e.walletId, [e]);
+  }
+  return rows
+    .sort((a, b) => ms(b.createdAt) - ms(a.createdAt))
+    .map((w) => walletDTO(w, byWallet.get(w.id) ?? []));
+}
+
+export async function getWalletsOverview(): Promise<WalletsOverviewDTO> {
+  const d = db();
+  const [wallets, accounts, txs, entries] = await Promise.all([
+    getWallets(),
+    d.accounts.toArray(),
+    d.transactions.toArray(),
+    d.walletEntries.toArray(),
+  ]);
+
+  const titleById = new Map(wallets.map((w) => [w.id, w.title]));
+
+  // ceiling alerts (مصرف ≥ 80% of سقف)
+  const alerts: WalletAlertDTO[] = [];
+  for (const w of wallets) {
+    if (w.ceiling == null || w.ceiling <= 0) continue;
+    const percent = Math.round((w.totalOut / w.ceiling) * 100);
+    if (percent >= 80) {
+      alerts.push({
+        walletId: w.id,
+        walletTitle: w.title,
+        level: percent >= 100 ? "OVER" : "WARN",
+        spent: w.totalOut,
+        ceiling: w.ceiling,
+        percent: Math.min(100, percent),
+      });
+    }
+  }
+  alerts.sort((a, b) => (a.level === b.level ? b.percent - a.percent : a.level === "OVER" ? -1 : 1));
+
+  // accounts linked to any wallet
+  const linkedAccounts: WalletLinkedAccountDTO[] = [];
+  for (const w of wallets) {
+    for (const accId of w.linkedAccountIds) {
+      const acc = accounts.find((a) => a.id === accId);
+      if (!acc) continue;
+      linkedAccounts.push({
+        id: acc.id,
+        name: acc.name,
+        type: acc.type,
+        balance: computeBalance(acc.id, acc.initialBalance, txs),
+        walletId: w.id,
+        walletTitle: w.title,
+      });
+    }
+  }
+
+  // last 5 entries across all wallets
+  const recentEntries = [...entries]
+    .sort((a, b) => ms(b.date) - ms(a.date))
+    .slice(0, 5)
+    .map((e) => ({
+      ...walletEntryDTO(e),
+      walletTitle: titleById.get(e.walletId) ?? "",
+    }));
+
+  return {
+    wallets,
+    totalBalance: wallets.reduce((s, w) => s + w.balance, 0),
+    totalIn: wallets.reduce((s, w) => s + w.totalIn, 0),
+    totalOut: wallets.reduce((s, w) => s + w.totalOut, 0),
+    walletCount: wallets.length,
+    alerts,
+    linkedAccounts,
+    recentEntries,
+  };
+}
+
+export async function saveWallet(
+  payload: Record<string, unknown> & { id?: string },
+): Promise<WalletDTO> {
+  const d = db();
+  const { id, ...body } = payload;
+
+  // linked accounts — must reference existing accounts
+  let linkedAccountIds: string[] | undefined;
+  if (body.linkedAccountIds !== undefined) {
+    const raw = Array.isArray(body.linkedAccountIds) ? body.linkedAccountIds : [];
+    const all = await d.accounts.toArray();
+    const validIds = new Set(all.map((a) => a.id));
+    linkedAccountIds = raw.map((x) => String(x)).filter((x) => validIds.has(x));
+  }
+
+  if (!id) {
+    // ── POST ──
+    const title = toStr(body.title)?.trim();
+    if (!title) throw new ApiError("عنوان کیف پول الزامی است", 400);
+
+    const ceiling =
+      body.ceiling === undefined || body.ceiling === null || body.ceiling === ""
+        ? null
+        : toNum(body.ceiling);
+    if (ceiling !== null && (ceiling === undefined || ceiling < 0))
+      throw new ApiError("سقف مصرف نمی‌تواند منفی باشد", 400);
+
+    const row: WalletRow = {
+      id: newId(),
+      title,
+      ceiling,
+      linkedAccountIds: linkedAccountIds ?? [],
+      createdAt: new Date().toISOString(),
+    };
+    await d.wallets.add(row);
+
+    // optional initial balance → an IN entry «موجودی اولیه»
+    const initialBalance = toNum(body.initialBalance);
+    if (initialBalance !== undefined && initialBalance > 0) {
+      const now = new Date().toISOString();
+      const entry: WalletEntryRow = {
+        id: newId(),
+        walletId: row.id,
+        type: "IN",
+        amount: initialBalance,
+        note: "موجودی اولیه",
+        date: now,
+        createdAt: now,
+      };
+      await d.walletEntries.add(entry);
+    }
+
+    const entries = await d.walletEntries.where("walletId").equals(row.id).toArray();
+    return walletDTO(row, entries);
+  }
+
+  // ── PATCH ──
+  const existing = await d.wallets.get(id);
+  if (!existing) throw new ApiError("کیف پول یافت نشد", 404);
+
+  const data: Partial<WalletRow> = {};
+  if (body.title !== undefined) {
+    const title = toStr(body.title)?.trim();
+    if (!title) throw new ApiError("عنوان کیف پول الزامی است", 400);
+    data.title = title;
+  }
+  if (body.ceiling !== undefined) {
+    const ceiling = body.ceiling === null || body.ceiling === "" ? null : toNum(body.ceiling);
+    if (ceiling !== null && (ceiling === undefined || ceiling < 0))
+      throw new ApiError("سقف مصرف نمی‌تواند منفی باشد", 400);
+    data.ceiling = ceiling;
+  }
+  if (linkedAccountIds !== undefined) data.linkedAccountIds = linkedAccountIds;
+
+  const merged = { ...existing, ...data };
+  await d.wallets.put(merged);
+  const entries = await d.walletEntries.where("walletId").equals(id).toArray();
+  return walletDTO(merged, entries);
+}
+
+export async function deleteWallet(id: string): Promise<{ ok: boolean }> {
+  const d = db();
+  const existing = await d.wallets.get(id);
+  if (!existing) throw new ApiError("کیف پول یافت نشد", 404);
+  await d.transaction("rw", d.wallets, d.walletEntries, async () => {
+    await d.walletEntries.where("walletId").equals(id).delete();
+    await d.wallets.delete(id);
+  });
+  return { ok: true };
+}
+
+export async function getWalletEntries(walletId: string): Promise<WalletEntryDTO[]> {
+  const d = db();
+  const existing = await d.wallets.get(walletId);
+  if (!existing) throw new ApiError("کیف پول یافت نشد", 404);
+  const rows = await d.walletEntries.where("walletId").equals(walletId).toArray();
+  return rows
+    .sort((a, b) => ms(b.date) - ms(a.date) || ms(b.createdAt) - ms(a.createdAt))
+    .map(walletEntryDTO);
+}
+
+export async function saveWalletEntry(
+  payload: Record<string, unknown> & { id?: string },
+): Promise<WalletEntryDTO> {
+  const d = db();
+  const { id, ...body } = payload;
+
+  if (!id) {
+    // ── POST ──
+    const walletId = toStr(body.walletId);
+    if (!walletId) throw new ApiError("کیف پول الزامی است", 400);
+    const wallet = await d.wallets.get(walletId);
+    if (!wallet) throw new ApiError("کیف پول یافت نشد", 404);
+
+    const type = toStr(body.type) ?? "OUT";
+    if (!WALLET_ENTRY_TYPES.includes(type)) throw new ApiError("نوع تراکنش نامعتبر است", 400);
+
+    const amount = toNum(body.amount);
+    if (amount === undefined || amount <= 0)
+      throw new ApiError("مبلغ باید بزرگ‌تر از صفر باشد", 400);
+
+    const note = toStr(body.note)?.trim() || null;
+    const date = (toDt(body.date) ?? new Date()).toISOString();
+
+    const row: WalletEntryRow = {
+      id: newId(),
+      walletId,
+      type,
+      amount,
+      note,
+      date,
+      createdAt: new Date().toISOString(),
+    };
+    await d.walletEntries.add(row);
+    return walletEntryDTO(row);
+  }
+
+  // ── PATCH ──
+  const existing = await d.walletEntries.get(id);
+  if (!existing) throw new ApiError("تراکنش یافت نشد", 404);
+
+  const data: Partial<WalletEntryRow> = {};
+  if (body.amount !== undefined) {
+    const amount = toNum(body.amount);
+    if (amount === undefined || amount <= 0)
+      throw new ApiError("مبلغ باید بزرگ‌تر از صفر باشد", 400);
+    data.amount = amount;
+  }
+  if (body.note !== undefined) data.note = toStr(body.note)?.trim() || null;
+  if (body.date !== undefined) {
+    const date = toDt(body.date);
+    if (!date) throw new ApiError("تاریخ نامعتبر است", 400);
+    data.date = date.toISOString();
+  }
+
+  const merged = { ...existing, ...data };
+  await d.walletEntries.put(merged);
+  return walletEntryDTO(merged);
+}
+
+export async function deleteWalletEntry(id: string): Promise<{ ok: boolean }> {
+  const d = db();
+  const existing = await d.walletEntries.get(id);
+  if (!existing) throw new ApiError("تراکنش یافت نشد", 404);
+  await d.walletEntries.delete(id);
+  return { ok: true };
 }
