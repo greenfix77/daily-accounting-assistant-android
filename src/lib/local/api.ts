@@ -2653,10 +2653,10 @@ export async function getWalletsOverview(): Promise<WalletsOverviewDTO> {
     }
   }
 
-  // last 5 entries across all wallets
+  // last 10 entries across all wallets
   const recentEntries = [...entries]
     .sort((a, b) => ms(b.date) - ms(a.date))
-    .slice(0, 5)
+    .slice(0, 10)
     .map((e) => ({
       ...walletEntryDTO(e),
       walletTitle: titleById.get(e.walletId) ?? "",

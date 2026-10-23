@@ -310,7 +310,7 @@ export const fa: Dict = {
   "wal.deleteConfirm": "آیا از حذف این کیف پول و همه تراکنش‌هایش مطمئن هستید؟",
   "wal.totalBalance": "مجموع موجودی کیف پول‌ها",
   "wal.balance": "مانده کیف پول",
-  "wal.walletsCount": "تعداد کیف پول‌ها",
+  "wal.walletsCount": "کیف پول‌ها",
   "wal.totalIn": "مجموع شارژ",
   "wal.totalOut": "مجموع هزینه",
   "wal.alerts": "هشدارها",

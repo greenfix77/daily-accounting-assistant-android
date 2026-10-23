@@ -34,7 +34,11 @@ import {
   useWalletsOverview,
 } from "@/lib/hooks";
 import { useAppStore } from "@/lib/store";
-import type { WalletAlertDTO, WalletDTO } from "@/lib/types";
+import type {
+  WalletAlertDTO,
+  WalletDTO,
+  WalletLinkedAccountDTO,
+} from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 const WALLET_COLOR = "#C08052";
@@ -78,13 +82,15 @@ function AlertBanner({ alert }: { alert: WalletAlertDTO }) {
   );
 }
 
-// ── Wallet row ───────────────────────────────────────────────
+// ── Wallet card (کیف پول + حساب‌های متصل + آمار — همه در یک کارت) ──
 function WalletRow({
   item,
+  linked,
   onEdit,
   onDelete,
 }: {
   item: WalletDTO;
+  linked: WalletLinkedAccountDTO[];
   onEdit: () => void;
   onDelete: () => void;
 }) {
@@ -96,73 +102,92 @@ function WalletRow({
       : null;
 
   return (
-    <div className="bg-card rounded-2xl card-soft p-4 flex items-center gap-3">
-      <button
-        type="button"
-        onClick={() => push("wallet-details", { id: item.id })}
-        aria-label={item.title}
-        className="flex-1 min-w-0 flex items-center gap-3 text-start cursor-pointer"
-      >
-        <IconBubble icon="wallet" color={WALLET_COLOR} />
+    <div className="bg-card rounded-2xl card-soft p-4 flex flex-col gap-3">
+      {/* wallet header — tap → details */}
+      <div className="flex items-center gap-3">
+        <button
+          type="button"
+          onClick={() => push("wallet-details", { id: item.id })}
+          aria-label={item.title}
+          className="flex-1 min-w-0 flex items-center gap-3 text-start cursor-pointer"
+        >
+          <IconBubble icon="wallet" color={WALLET_COLOR} />
 
-        <div className="flex-1 min-w-0 flex flex-col gap-1">
-          <div className="flex items-center gap-2">
+          <div className="flex-1 min-w-0 flex flex-col gap-1">
             <span className="font-bold text-[14px] text-foreground truncate">
               {item.title}
             </span>
-            {item.linkedAccountIds.length > 0 && (
-              <span className="flex items-center gap-0.5 text-[10.5px] text-muted-foreground shrink-0">
-                <Link2 className="w-3 h-3" />
-                {f.fa(item.linkedAccountIds.length)}
-              </span>
-            )}
+            <p className="text-[11px] text-muted-foreground truncate">
+              {f.t("wal.transactions")}: {f.fa(item.entryCount)}
+              {item.ceiling != null && item.ceiling > 0
+                ? ` • ${f.t("wal.ceiling")}: ${f.money(item.ceiling, false)}`
+                : ""}
+            </p>
+            {percent !== null && <ProgressBar value={percent} className="h-1.5" />}
           </div>
-          <p className="text-[11px] text-muted-foreground truncate">
-            {f.t("wal.transactions")}: {f.fa(item.entryCount)}
-            {item.ceiling != null && item.ceiling > 0
-              ? ` • ${f.t("wal.ceiling")}: ${f.money(item.ceiling, false)}`
-              : ""}
-          </p>
-          {percent !== null && <ProgressBar value={percent} className="h-1.5" />}
-        </div>
 
-        <div className="flex flex-col items-end gap-1 shrink-0">
-          <span
-            className={cn(
-              "num-input text-[14px] font-extrabold",
-              item.balance < 0 ? "text-expense" : "text-foreground"
-            )}
-            dir="ltr"
-          >
-            {f.money(item.balance, false)}
+          <div className="flex flex-col items-end gap-1 shrink-0">
+            <span
+              className={cn(
+                "num-input text-[14px] font-extrabold",
+                item.balance < 0 ? "text-expense" : "text-foreground"
+              )}
+              dir="ltr"
+            >
+              {f.money(item.balance, false)}
+            </span>
+            <ChevronLeft className="w-4 h-4 text-muted-foreground rtl:rotate-0 ltr:rotate-180" />
+          </div>
+        </button>
+
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              aria-label="more"
+              className="w-8 h-8 rounded-full flex items-center justify-center text-muted-foreground hover:bg-secondary transition-colors shrink-0"
+            >
+              <MoreVertical className="w-4 h-4" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="rounded-2xl bg-card w-44">
+            <DropdownMenuItem onClick={onEdit} className="text-[13px] gap-2">
+              <Pencil className="w-3.5 h-3.5" />
+              {f.t("common.edit")}
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onClick={onDelete}
+              className="text-[13px] gap-2 text-expense focus:text-expense"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              {f.t("common.delete")}
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+
+      {/* حساب‌های متصل به همین کیف — داخل همان کارت */}
+      {linked.length > 0 && (
+        <div className="pt-3 border-t border-border/60 flex flex-col gap-2">
+          <span className="flex items-center gap-1.5 text-[11px] font-bold text-muted-foreground">
+            <Link2 className="w-3.5 h-3.5 text-primary" />
+            {f.t("wal.linkedAccounts")}
           </span>
-          <ChevronLeft className="w-4 h-4 text-muted-foreground rtl:rotate-0 ltr:rotate-180" />
+          {linked.map((a) => (
+            <div key={a.id} className="flex items-center gap-2.5">
+              <IconBubble icon="landmark" color="#4E9B72" size="sm" />
+              <span className="flex-1 min-w-0 text-[12.5px] font-semibold text-foreground truncate">
+                {a.name}
+              </span>
+              <span
+                className="num-input text-[12.5px] font-bold text-foreground shrink-0"
+                dir="ltr"
+              >
+                {f.money(a.balance, false)}
+              </span>
+            </div>
+          ))}
         </div>
-      </button>
-
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <button
-            aria-label="more"
-            className="w-8 h-8 rounded-full flex items-center justify-center text-muted-foreground hover:bg-secondary transition-colors shrink-0"
-          >
-            <MoreVertical className="w-4 h-4" />
-          </button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="rounded-2xl bg-card w-44">
-          <DropdownMenuItem onClick={onEdit} className="text-[13px] gap-2">
-            <Pencil className="w-3.5 h-3.5" />
-            {f.t("common.edit")}
-          </DropdownMenuItem>
-          <DropdownMenuItem
-            onClick={onDelete}
-            className="text-[13px] gap-2 text-expense focus:text-expense"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-            {f.t("common.delete")}
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
+      )}
     </div>
   );
 }
@@ -263,7 +288,7 @@ export default function WalletScreen({ params }: { params?: Record<string, unkno
               </section>
             )}
 
-            {/* ── wallets list ── */}
+            {/* ── wallets list (هر کیف + حساب‌های متصلش در یک کارت) ── */}
             <section className="flex flex-col gap-2" aria-label={f.t("wal.title")}>
               <h2 className="text-[13px] font-bold text-foreground px-1">
                 {f.t("wal.walletsCount")}
@@ -272,43 +297,11 @@ export default function WalletScreen({ params }: { params?: Record<string, unkno
                 <WalletRow
                   key={w.id}
                   item={w}
+                  linked={linkedAccounts.filter((a) => a.walletId === w.id)}
                   onEdit={() => push("wallet-form", { id: w.id })}
                   onDelete={() => setDeleteTarget(w)}
                 />
               ))}
-            </section>
-
-            {/* ── linked accounts ── */}
-            <section className="flex flex-col gap-2" aria-label={f.t("wal.linkedAccounts")}>
-              <h2 className="text-[13px] font-bold text-foreground px-1 flex items-center gap-1.5">
-                <Link2 className="w-4 h-4 text-primary" />
-                {f.t("wal.linkedAccounts")}
-              </h2>
-              {linkedAccounts.length === 0 ? (
-                <p className="bg-card rounded-2xl card-soft p-4 text-[12px] text-muted-foreground text-center">
-                  {f.t("wal.noLinkedAccounts")}
-                </p>
-              ) : (
-                linkedAccounts.map((a) => (
-                  <div
-                    key={`${a.walletId}-${a.id}`}
-                    className="bg-card rounded-2xl card-soft p-3.5 flex items-center gap-3"
-                  >
-                    <IconBubble icon="landmark" color="#4E9B72" size="sm" />
-                    <div className="flex-1 min-w-0 flex flex-col gap-0.5">
-                      <span className="text-[13px] font-bold text-foreground truncate">
-                        {a.name}
-                      </span>
-                      <span className="text-[10.5px] text-muted-foreground truncate">
-                        {a.walletTitle}
-                      </span>
-                    </div>
-                    <span className="num-input text-[13px] font-bold text-foreground shrink-0" dir="ltr">
-                      {f.money(a.balance, false)}
-                    </span>
-                  </div>
-                ))
-              )}
             </section>
 
             {/* ── recent wallet transactions ── */}
