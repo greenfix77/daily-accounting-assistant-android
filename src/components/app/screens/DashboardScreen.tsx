@@ -16,9 +16,11 @@ import {
   DndContext,
   closestCenter,
   PointerSensor,
+  TouchSensor,
   useSensor,
   useSensors,
   type DragEndEvent,
+  type DragOverEvent,
 } from "@dnd-kit/core";
 import {
   SortableContext,
@@ -114,6 +116,21 @@ function UpcomingRow({ item }: { item: UpcomingDTO }) {
   );
 }
 
+// ── سنسور موس: فقط pointerType «mouse» — روی لمس، TouchSensor مالک ژست است.
+// اگر PointerSensor روی لمس فعال شود، WebView به‌محض حرکت انگشت ژست را برای
+// اسکرول می‌گیرد و pointercancel درگ را لغو می‌کند (باگ «ویجت‌ها تکان می‌خورند
+// ولی جابجا نمی‌شوند»). TouchSensor بعد از فعال‌سازی روی touchmove
+// preventDefault می‌زند و اسکرول را قفل می‌کند.
+class MousePointerSensor extends PointerSensor {
+  static activators = [
+    {
+      eventName: "onPointerDown" as const,
+      handler: ({ nativeEvent: event }: React.PointerEvent) =>
+        event.pointerType === "mouse" && event.isPrimary && event.button === 0,
+    },
+  ];
+}
+
 // ── Sortable wrapper: long-press (250ms) then drag to reorder ──
 function SortableCard({ id, children }: { id: string; children: React.ReactNode }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
@@ -127,8 +144,9 @@ function SortableCard({ id, children }: { id: string; children: React.ReactNode 
       style={{
         transform: CSS.Transform.toString(transform),
         transition,
-        touchAction: "manipulation",
-      }}
+        touchAction: "pan-y",
+        WebkitTouchCallout: "none",
+      } as React.CSSProperties}
       className={cn(
         "relative select-none",
         isDragging && "z-20 opacity-90 scale-[1.01] drop-shadow-lg"
@@ -157,30 +175,53 @@ export default function DashboardScreen({ params }: { params?: Record<string, un
       : null;
 
   // ── ویجت‌های صفحه اصلی: ترتیب + روشن/خاموش (پایدار در پروفایل) ──
+  // موس: درگ با حرکت ۶px | لمس: نگه‌داشتن ۲۵۰ms (با تحمل ۸px) و بعد درگ —
+  // TouchSensor حین درگ روی touchmove.preventDefault می‌زند تا صفحه اسکرول نکند.
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { delay: 250, tolerance: 8 } })
+    useSensor(MousePointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 250, tolerance: 8 } })
   );
   const parsedWidgets = React.useMemo(
     () => parseHomeWidgets(settings?.homeWidgets, settings?.dayCounterOnHome),
     [settings?.homeWidgets, settings?.dayCounterOnHome]
   );
   const [widgets, setWidgets] = React.useState(parsedWidgets);
+  const widgetsRef = React.useRef(widgets);
+  const applyWidgets = React.useCallback((next: typeof parsedWidgets) => {
+    widgetsRef.current = next;
+    setWidgets(next);
+  }, []);
   React.useEffect(() => {
-    setWidgets(parsedWidgets);
-  }, [parsedWidgets]);
+    applyWidgets(parsedWidgets);
+  }, [parsedWidgets, applyWidgets]);
 
+  const reorderTo = React.useCallback((activeId: string, overId: string) => {
+    const cur = widgetsRef.current;
+    const from = cur.order.indexOf(activeId as HomeWidgetId);
+    const to = cur.order.indexOf(overId as HomeWidgetId);
+    if (from < 0 || to < 0 || from === to) return;
+    applyWidgets({ order: arrayMove(cur.order, from, to), off: cur.off });
+  }, [applyWidgets]);
+
+  // حین درگ، جای آیتم‌ها زنده جابجا می‌شود (بدون ذخیره)
+  const onDragOver = React.useCallback(
+    (e: DragOverEvent) => {
+      const { active, over } = e;
+      if (!over || active.id === over.id) return;
+      reorderTo(String(active.id), String(over.id));
+    },
+    [reorderTo]
+  );
+
+  // پایان درگ → ذخیره پایدار ترتیب نهایی
   const onDragEnd = React.useCallback(
     (e: DragEndEvent) => {
       const { active, over } = e;
-      if (!over || active.id === over.id) return;
-      const from = widgets.order.indexOf(active.id as HomeWidgetId);
-      const to = widgets.order.indexOf(over.id as HomeWidgetId);
-      if (from < 0 || to < 0) return;
-      const next = { order: arrayMove(widgets.order, from, to), off: widgets.off };
-      setWidgets(next);
-      updateSettings.mutate({ homeWidgets: serializeHomeWidgets(next) });
+      if (over && active.id !== over.id) reorderTo(String(active.id), String(over.id));
+      const cur = widgetsRef.current;
+      updateSettings.mutate({ homeWidgets: serializeHomeWidgets(cur) });
     },
-    [widgets, updateSettings]
+    [reorderTo, updateSettings]
   );
 
   const widgetOn = React.useCallback(
@@ -294,7 +335,12 @@ export default function DashboardScreen({ params }: { params?: Record<string, un
             </div>
 
             {/* ── ویجت‌ها: قابل خاموش/روشن در تنظیمات + جابجایی با نگه‌داشتن انگشت ── */}
-            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
+            <DndContext
+              sensors={sensors}
+              collisionDetection={closestCenter}
+              onDragOver={onDragOver}
+              onDragEnd={onDragEnd}
+            >
               <SortableContext items={visibleOrder} strategy={verticalListSortingStrategy}>
                 {visibleOrder.map((wid) => (
                   <SortableCard key={wid} id={wid}>
