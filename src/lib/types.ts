@@ -71,6 +71,11 @@ export interface TransactionDTO {
   categoryName: string | null;
   categoryColor: string | null;
   categoryIcon: string | null;
+  /** wallet-linked transaction — wallet it also applies to (null = plain account transaction) */
+  walletId: string | null;
+  walletName: string | null;
+  /** wallet-linked transaction — id of the paired wallet entry */
+  walletEntryId: string | null;
   date: string;
   createdAt: string;
 }

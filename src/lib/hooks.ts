@@ -26,7 +26,6 @@ import {
   getTransaction,
   getTransactions,
   login as loginLocal,
-  payRecurring,
   register as registerLocal,
   restoreBackup,
   saveAccount,

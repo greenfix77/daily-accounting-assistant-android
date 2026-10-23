@@ -68,6 +68,10 @@ export interface TransactionRow {
   categoryId: string | null;
   debtId: string | null;
   recurringId: string | null;
+  /** wallet-linked transaction — wallet the entry belongs to (null = plain account transaction) */
+  walletId: string | null;
+  /** wallet-linked transaction — the paired WalletEntryRow id (null = plain account transaction) */
+  walletEntryId: string | null;
   date: string; // ISO
   createdAt: string; // ISO
 }

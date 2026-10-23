@@ -78,6 +78,7 @@ function TxRow({ tx, onPress }: { tx: TransactionDTO; onPress: () => void }) {
           {tx.title ?? tx.categoryName ?? typeLabel(tx.type, f)}
         </p>
         <p className="text-[11px] text-muted-foreground truncate mt-0.5">
+          {tx.walletId ? `${tx.walletName ?? f.t("tx.wallet")} • ` : ""}
           {tx.accountName}
           {tx.toAccountName ? ` ← ${tx.toAccountName}` : ""} • {f.dateShort(tx.date)}
         </p>

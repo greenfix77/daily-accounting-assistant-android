@@ -126,6 +126,12 @@ export default function TransactionDetailsScreen({ params }: { params?: Record<s
                     : tx.accountName
                 }
               />
+              {tx.walletId && (
+                <InfoRow
+                  label={f.t("tx.walletDetail")}
+                  value={tx.walletName ?? f.t("tx.wallet")}
+                />
+              )}
               <InfoRow
                 label={f.t("tx.categoryDetail")}
                 value={tx.categoryName ?? f.t("tx.noCategory")}

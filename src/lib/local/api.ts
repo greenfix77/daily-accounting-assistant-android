@@ -164,16 +164,29 @@ const ms = (iso: string): number => new Date(iso).getTime();
 
 type AccMap = Map<string, AccountRow>;
 type CatMap = Map<string, CategoryRow>;
+type WalletMap = Map<string, WalletRow>;
 
-async function loadMaps(d: HesabyarDB): Promise<{ accMap: AccMap; catMap: CatMap }> {
-  const [accounts, categories] = await Promise.all([d.accounts.toArray(), d.categories.toArray()]);
+async function loadMaps(
+  d: HesabyarDB,
+): Promise<{ accMap: AccMap; catMap: CatMap; walletMap: WalletMap }> {
+  const [accounts, categories, wallets] = await Promise.all([
+    d.accounts.toArray(),
+    d.categories.toArray(),
+    d.wallets.toArray(),
+  ]);
   return {
     accMap: new Map(accounts.map((a) => [a.id, a])),
     catMap: new Map(categories.map((c) => [c.id, c])),
+    walletMap: new Map(wallets.map((w) => [w.id, w])),
   };
 }
 
-function txDTO(tx: TransactionRow, accMap: AccMap, catMap: CatMap): TransactionDTO {
+function txDTO(
+  tx: TransactionRow,
+  accMap: AccMap,
+  catMap: CatMap,
+  walletMap?: WalletMap,
+): TransactionDTO {
   const account = accMap.get(tx.accountId);
   const toAccount = tx.toAccountId ? accMap.get(tx.toAccountId) : undefined;
   const category = tx.categoryId ? catMap.get(tx.categoryId) : undefined;
@@ -193,6 +206,9 @@ function txDTO(tx: TransactionRow, accMap: AccMap, catMap: CatMap): TransactionD
     categoryName: category?.name ?? null,
     categoryColor: category?.color ?? null,
     categoryIcon: category?.icon ?? null,
+    walletId: tx.walletId ?? null,
+    walletName: tx.walletId ? (walletMap?.get(tx.walletId)?.title ?? null) : null,
+    walletEntryId: tx.walletEntryId ?? null,
     date: tx.date,
     createdAt: tx.createdAt,
   };
@@ -552,7 +568,10 @@ export interface TxFilters {
 
 export async function getTransactions(filters: TxFilters = {}): Promise<TransactionDTO[]> {
   const d = db();
-  const [txs, { accMap, catMap }] = await Promise.all([d.transactions.toArray(), loadMaps(d)]);
+  const [txs, { accMap, catMap, walletMap }] = await Promise.all([
+    d.transactions.toArray(),
+    loadMaps(d),
+  ]);
 
   const type = filters.type;
   const q = filters.q;
@@ -611,22 +630,233 @@ export async function getTransactions(filters: TxFilters = {}): Promise<Transact
     }
   });
 
-  return sorted.slice(0, limit).map((row) => txDTO(row, accMap, catMap));
+  return sorted.slice(0, limit).map((row) => txDTO(row, accMap, catMap, walletMap));
 }
 
 export async function getTransaction(id: string): Promise<TransactionDTO> {
   const d = db();
   const row = await d.transactions.get(id);
   if (!row) throw new ApiError("تراکنش یافت نشد", 404);
-  const { accMap, catMap } = await loadMaps(d);
-  return txDTO(row, accMap, catMap);
+  const { accMap, catMap, walletMap } = await loadMaps(d);
+  return txDTO(row, accMap, catMap, walletMap);
+}
+
+// ── Wallet-sourced transactions (add-transaction screen, wallet source) ──
+// source === "WALLET": always creates a WalletEntry (IN/OUT). When the user
+// also picks a linked account, a paired Transaction row is created on that
+// account too — walletId + walletEntryId tie the two ledgers together so the
+// account takes part in the financial calculations. Picking «هیچکدام» keeps
+// the impact wallet-only (no transaction row, no accounting side-effects).
+
+async function saveWalletTransaction(
+  d: HesabyarDB,
+  body: Record<string, unknown>,
+): Promise<TransactionDTO | WalletEntryDTO> {
+  const type = typeof body.type === "string" ? body.type : "";
+  if (type !== "INCOME" && type !== "EXPENSE")
+    throw new ApiError("برای تراکنش کیف پول فقط درآمد یا هزینه مجاز است", 400);
+
+  const amount = toNum(body.amount);
+  if (amount === undefined || amount <= 0)
+    throw new ApiError("مبلغ باید بزرگ‌تر از صفر باشد", 400);
+
+  const walletId = toStr(body.walletId);
+  if (!walletId) throw new ApiError("کیف پول الزامی است", 400);
+  const wallet = await d.wallets.get(walletId);
+  if (!wallet) throw new ApiError("کیف پول یافت نشد", 404);
+
+  // optional linked account — must be one of the wallet's linked accounts
+  let linkedAccountId: string | null = null;
+  if (typeof body.linkedAccountId === "string" && body.linkedAccountId) {
+    if (!wallet.linkedAccountIds.includes(body.linkedAccountId))
+      throw new ApiError("حساب انتخاب‌شده به این کیف پول متصل نیست", 400);
+    const account = await d.accounts.get(body.linkedAccountId);
+    if (!account) throw new ApiError("حساب یافت نشد", 400);
+    linkedAccountId = account.id;
+  }
+
+  let categoryId: string | null = null;
+  if (typeof body.categoryId === "string" && body.categoryId) {
+    const category = await d.categories.get(body.categoryId);
+    if (!category) throw new ApiError("دسته‌بندی یافت نشد", 400);
+    categoryId = category.id;
+  }
+
+  const date = (toDt(body.date) ?? new Date()).toISOString();
+  const note =
+    toStr(body.title)?.trim() || toStr(body.description)?.trim() || toStr(body.notes)?.trim() || null;
+
+  const entry: WalletEntryRow = {
+    id: newId(),
+    walletId,
+    type: type === "INCOME" ? "IN" : "OUT",
+    amount,
+    note,
+    date,
+    createdAt: new Date().toISOString(),
+  };
+  await d.walletEntries.add(entry);
+
+  // «هیچکدام» → wallet-only: only the wallet number is affected
+  if (!linkedAccountId) return walletEntryDTO(entry);
+
+  const created: TransactionRow = {
+    id: newId(),
+    type,
+    amount,
+    title: toStr(body.title) || null,
+    description: toStr(body.description) || null,
+    notes: toStr(body.notes) || null,
+    receiptUrl: toStr(body.receiptUrl) || null,
+    accountId: linkedAccountId,
+    toAccountId: null,
+    categoryId,
+    debtId: null,
+    recurringId: null,
+    walletId,
+    walletEntryId: entry.id,
+    date,
+    createdAt: new Date().toISOString(),
+  };
+  await d.transactions.add(created);
+  const { accMap, catMap, walletMap } = await loadMaps(d);
+  return txDTO(created, accMap, catMap, walletMap);
+}
+
+async function patchWalletTransaction(
+  d: HesabyarDB,
+  existing: TransactionRow,
+  body: Record<string, unknown>,
+): Promise<TransactionDTO | WalletEntryDTO> {
+  const walletId = existing.walletId as string;
+  const wallet = await d.wallets.get(walletId);
+  if (!wallet) throw new ApiError("کیف پول یافت نشد", 404);
+
+  let type = existing.type;
+  if (body.type !== undefined) {
+    if (typeof body.type !== "string" || (body.type !== "INCOME" && body.type !== "EXPENSE"))
+      throw new ApiError("برای تراکنش کیف پول فقط درآمد یا هزینه مجاز است", 400);
+    type = body.type;
+  }
+
+  let amount = existing.amount;
+  if (body.amount !== undefined) {
+    const a = toNum(body.amount);
+    if (a === undefined || a <= 0) throw new ApiError("مبلغ باید بزرگ‌تر از صفر باشد", 400);
+    amount = a;
+  }
+
+  // linked account: change within wallet links, or remove (null → wallet-only)
+  let accountId: string | null = existing.accountId;
+  if (body.linkedAccountId !== undefined) {
+    const raw =
+      typeof body.linkedAccountId === "string" && body.linkedAccountId
+        ? body.linkedAccountId
+        : null;
+    if (raw && !wallet.linkedAccountIds.includes(raw))
+      throw new ApiError("حساب انتخاب‌شده به این کیف پول متصل نیست", 400);
+    if (raw) {
+      const account = await d.accounts.get(raw);
+      if (!account) throw new ApiError("حساب یافت نشد", 400);
+      accountId = account.id;
+    } else {
+      accountId = null;
+    }
+  }
+
+  let date = existing.date;
+  if (body.date !== undefined) {
+    const dt = toDt(body.date);
+    if (!dt) throw new ApiError("تاریخ نامعتبر است", 400);
+    date = dt.toISOString();
+  }
+
+  let title = existing.title;
+  if (body.title !== undefined) title = toStr(body.title) || null;
+  let description = existing.description;
+  if (body.description !== undefined) description = toStr(body.description) || null;
+  let notes = existing.notes;
+  if (body.notes !== undefined) notes = toStr(body.notes) || null;
+  let receiptUrl = existing.receiptUrl;
+  if (body.receiptUrl !== undefined) receiptUrl = toStr(body.receiptUrl) || null;
+
+  let categoryId = existing.categoryId;
+  if (body.categoryId !== undefined) {
+    if (body.categoryId === null || body.categoryId === "") {
+      categoryId = null;
+    } else if (typeof body.categoryId === "string") {
+      const category = await d.categories.get(body.categoryId);
+      if (!category) throw new ApiError("دسته‌بندی یافت نشد", 400);
+      categoryId = category.id;
+    }
+  }
+
+  const note = title?.trim() || description?.trim() || notes?.trim() || null;
+
+  // keep the paired wallet entry in sync
+  const walletEntryId = existing.walletEntryId;
+  if (walletEntryId) {
+    const entry = await d.walletEntries.get(walletEntryId);
+    if (entry) {
+      await d.walletEntries.put({
+        ...entry,
+        type: type === "INCOME" ? "IN" : "OUT",
+        amount,
+        note,
+        date,
+      });
+    }
+  }
+
+  // linked account removed → keep only the wallet side: delete the paired
+  // transaction row entirely (wallet-only from now on, no accounting impact)
+  if (!accountId) {
+    if (walletEntryId) {
+      const entry = await d.walletEntries.get(walletEntryId);
+      if (entry) {
+        await d.transactions.delete(existing.id);
+        return walletEntryDTO(entry);
+      }
+    }
+    const fallback: WalletEntryRow = {
+      id: newId(),
+      walletId,
+      type: type === "INCOME" ? "IN" : "OUT",
+      amount,
+      note,
+      date,
+      createdAt: new Date().toISOString(),
+    };
+    await d.walletEntries.add(fallback);
+    await d.transactions.delete(existing.id);
+    return walletEntryDTO(fallback);
+  }
+
+  const updated: TransactionRow = {
+    ...existing,
+    type,
+    amount,
+    accountId,
+    toAccountId: null,
+    categoryId,
+    title,
+    description,
+    notes,
+    receiptUrl,
+    date,
+  };
+  await d.transactions.put(updated);
+  const { accMap, catMap, walletMap } = await loadMaps(d);
+  return txDTO(updated, accMap, catMap, walletMap);
 }
 
 export async function saveTransaction(
   payload: Record<string, unknown> & { id?: string },
-): Promise<TransactionDTO> {
+): Promise<TransactionDTO | WalletEntryDTO> {
   const d = db();
   const { id, ...body } = payload;
+
+  if (!id && body.source === "WALLET") return saveWalletTransaction(d, body);
 
   if (!id) {
     // ── POST ──
@@ -674,17 +904,22 @@ export async function saveTransaction(
       categoryId,
       debtId: null,
       recurringId: null,
+      walletId: null,
+      walletEntryId: null,
       date: (toDt(body.date) ?? new Date()).toISOString(),
       createdAt: new Date().toISOString(),
     };
     await d.transactions.add(created);
-    const { accMap, catMap } = await loadMaps(d);
-    return txDTO(created, accMap, catMap);
+    const { accMap, catMap, walletMap } = await loadMaps(d);
+    return txDTO(created, accMap, catMap, walletMap);
   }
 
   // ── PATCH ──
   const existing = await d.transactions.get(id);
   if (!existing) throw new ApiError("تراکنش یافت نشد", 404);
+
+  // wallet-linked transaction → dedicated sync path (wallet entry + optional account)
+  if (existing.walletId) return patchWalletTransaction(d, existing, body);
 
   let type = existing.type;
   if (body.type !== undefined) {
@@ -769,14 +1004,16 @@ export async function saveTransaction(
     date,
   };
   await d.transactions.put(updated);
-  const { accMap, catMap } = await loadMaps(d);
-  return txDTO(updated, accMap, catMap);
+  const { accMap, catMap, walletMap } = await loadMaps(d);
+  return txDTO(updated, accMap, catMap, walletMap);
 }
 
 export async function deleteTransaction(id: string): Promise<{ ok: boolean }> {
   const d = db();
   const existing = await d.transactions.get(id);
   if (!existing) throw new ApiError("تراکنش یافت نشد", 404);
+  // wallet-linked transaction → remove the paired wallet entry as well
+  if (existing.walletEntryId) await d.walletEntries.delete(existing.walletEntryId);
   await d.transactions.delete(id);
   return { ok: true };
 }
@@ -1648,7 +1885,7 @@ export async function getDashboard(): Promise<DashboardDTO> {
   const month = jalaliMonthRange(now);
   const monthKey = jalaliMonthKey(now);
 
-  const [accountRows, txRows, budgetRows, debtRows, recurringRows, reminderRows, goalRows, depositRows, { accMap, catMap }] =
+  const [accountRows, txRows, budgetRows, debtRows, recurringRows, reminderRows, goalRows, depositRows, { accMap, catMap, walletMap }] =
     await Promise.all([
       d.accounts.toArray(),
       d.transactions.toArray(),
@@ -1730,7 +1967,7 @@ export async function getDashboard(): Promise<DashboardDTO> {
   }
 
   // ---- recent transactions ----
-  const recent = txs.slice(0, 6).map((row) => txDTO(row, accMap, catMap));
+  const recent = txs.slice(0, 6).map((row) => txDTO(row, accMap, catMap, walletMap));
 
   // ---- upcoming (next 5 within 30 days) ----
   const upcoming: UpcomingDTO[] = [];
@@ -2170,7 +2407,7 @@ export async function restoreBackup(body: unknown): Promise<{ ok: boolean; count
   const transactions = asRows(
     pick(
       b.transactions,
-      ["id", "type", "amount", "title", "description", "notes", "receiptUrl", "accountId", "toAccountId", "categoryId", "debtId", "recurringId", "date", "createdAt"],
+      ["id", "type", "amount", "title", "description", "notes", "receiptUrl", "accountId", "toAccountId", "categoryId", "debtId", "recurringId", "walletId", "walletEntryId", "date", "createdAt"],
       ["date", "createdAt"],
     ),
   );
