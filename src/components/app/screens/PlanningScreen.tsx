@@ -3,6 +3,7 @@
 import * as React from "react";
 import {
   Bell,
+  CalendarClock,
   Coins,
   HandCoins,
   PieChart,
@@ -32,6 +33,7 @@ const MODULES: PlanModule[] = [
   { titleKey: "plan.debts", descKey: "plan.debtsDesc", icon: HandCoins, color: "#E5757A", screen: "debts" },
   { titleKey: "plan.recurring", descKey: "plan.recurringDesc", icon: Repeat, color: "#5E9EA0", screen: "recurring" },
   { titleKey: "plan.wallet", descKey: "plan.walletDesc", icon: Coins, color: "#C08052", screen: "wallet" },
+  { titleKey: "plan.dayCounter", descKey: "plan.dayCounterDesc", icon: CalendarClock, color: "#8F6BC4", screen: "dc" },
   { titleKey: "plan.savings", descKey: "plan.savingsDesc", icon: Target, color: "#E5B84E", screen: "savings" },
   { titleKey: "plan.reminders", descKey: "plan.remindersDesc", icon: Bell, color: "#D97BA6", screen: "reminders", wide: true },
 ];

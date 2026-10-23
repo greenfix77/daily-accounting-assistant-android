@@ -41,8 +41,11 @@ import {
   updateSettings as updateSettingsLocal,
   deleteWallet,
   deleteWalletEntry,
+  deleteDayCounter,
+  getDayCounters,
   getWalletEntries,
   getWalletsOverview,
+  saveDayCounter,
   saveWallet,
   saveWalletEntry,
 } from "./local/api";
@@ -53,6 +56,7 @@ import type {
   BudgetItemDTO,
   CategoryDTO,
   DashboardDTO,
+  DayCounterDTO,
   DebtDTO,
   ProfileDTO,
   RecurringDTO,
@@ -332,6 +336,32 @@ export function useDeleteWalletEntry() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => deleteWalletEntry(id),
+    onSuccess: () => qc.invalidateQueries(),
+  });
+}
+
+// ── Day counters (روز شمار) ──────────────────────────────────
+export function useDayCounters() {
+  return useQuery<DayCounterDTO[]>({
+    queryKey: ["day-counters"],
+    queryFn: () => getDayCounters(),
+    enabled: isBrowser,
+  });
+}
+
+export function useSaveDayCounter() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: Record<string, unknown> & { id?: string }) =>
+      saveDayCounter(payload),
+    onSuccess: () => qc.invalidateQueries(),
+  });
+}
+
+export function useDeleteDayCounter() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => deleteDayCounter(id),
     onSuccess: () => qc.invalidateQueries(),
   });
 }

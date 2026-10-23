@@ -21,6 +21,7 @@ import {
   type AccountRow,
   type BudgetRow,
   type CategoryRow,
+  type DayCounterRow,
   type DebtPaymentRow,
   type DebtRow,
   type HesabyarDB,
@@ -40,6 +41,8 @@ import type {
   CategoryDTO,
   CategoryType,
   DashboardDTO,
+  DayCounterDesign,
+  DayCounterDTO,
   DebtDTO,
   DebtStatus,
   DebtType,
@@ -57,6 +60,7 @@ import type {
   WalletLinkedAccountDTO,
   WalletsOverviewDTO,
 } from "../types";
+import { computeDayCounter } from "../day-counter";
 
 // ── guards & shared helpers ──────────────────────────────────
 
@@ -68,6 +72,7 @@ const REC_TYPES = ["EXPENSE", "INCOME"];
 const FREQUENCIES = ["DAILY", "WEEKLY", "MONTHLY", "YEARLY"];
 const REMINDER_TYPES = ["BILL", "INSTALLMENT", "DEBT", "SAVINGS", "CUSTOM"];
 const REPEATS = ["NONE", "DAILY", "WEEKLY", "MONTHLY", "YEARLY"];
+const DC_DESIGNS = ["RING", "FLIP", "BAR"];
 
 /** Throws the friendly offline error when there is no IndexedDB (SSR/prerender). */
 function db(): HesabyarDB {
@@ -2318,12 +2323,13 @@ export interface BackupFile {
   reminders: ReminderRow[];
   wallets: WalletRow[];
   walletEntries: WalletEntryRow[];
+  dayCounters: DayCounterRow[];
   exportedAt: string;
 }
 
 export async function getBackup(): Promise<BackupFile> {
   const d = db();
-  const [profile, accounts, categories, transactions, budgets, debts, debtPayments, recurring, savingsGoals, savingsDeposits, reminders, wallets, walletEntries] =
+  const [profile, accounts, categories, transactions, budgets, debts, debtPayments, recurring, savingsGoals, savingsDeposits, reminders, wallets, walletEntries, dayCounters] =
     await Promise.all([
       d.profile.toArray(),
       d.accounts.toArray(),
@@ -2338,6 +2344,7 @@ export async function getBackup(): Promise<BackupFile> {
       d.reminders.toArray(),
       d.wallets.toArray(),
       d.walletEntries.toArray(),
+      d.dayCounters.toArray(),
     ]);
 
   return {
@@ -2354,6 +2361,7 @@ export async function getBackup(): Promise<BackupFile> {
     reminders,
     wallets,
     walletEntries,
+    dayCounters,
     exportedAt: new Date().toISOString(),
   };
 }
@@ -2420,6 +2428,7 @@ export async function restoreBackup(body: unknown): Promise<{ ok: boolean; count
   const reminders = asRows(pick(b.reminders, ["id", "title", "type", "date", "time", "repeat", "isDone", "createdAt"], ["date", "createdAt"]));
   const wallets = pick(b.wallets, ["id", "title", "ceiling", "linkedAccountIds", "createdAt"], ["createdAt"]);
   const walletEntries = pick(b.walletEntries, ["id", "walletId", "type", "amount", "note", "date", "createdAt"], ["date", "createdAt"]);
+  const dayCounters = pick(b.dayCounters, ["id", "title", "startDate", "endDate", "design", "alarmEnabled", "alarmDays", "alarmSound", "color", "createdAt"], ["startDate", "endDate", "createdAt"]);
 
   const counts = (await d.transaction(
     "rw",
@@ -2436,9 +2445,11 @@ export async function restoreBackup(body: unknown): Promise<{ ok: boolean; count
       d.reminders,
       d.wallets,
       d.walletEntries,
+      d.dayCounters,
     ],
     async () => {
       // wipe — FK-safe order
+      await d.dayCounters.clear();
       await d.walletEntries.clear();
       await d.wallets.clear();
       await d.debtPayments.clear();
@@ -2465,7 +2476,8 @@ export async function restoreBackup(body: unknown): Promise<{ ok: boolean; count
         | "savingsDeposits"
         | "reminders"
         | "wallets"
-        | "walletEntries";
+        | "walletEntries"
+        | "dayCounters";
       const insert = async (name: TableName, rows: Row[]): Promise<number> => {
         if (!rows.length) return 0;
         await (d[name] as unknown as import("dexie").Table<Row, string>).bulkAdd(rows);
@@ -2484,6 +2496,7 @@ export async function restoreBackup(body: unknown): Promise<{ ok: boolean; count
         reminders: await insert("reminders", reminders),
         wallets: await insert("wallets", wallets),
         walletEntries: await insert("walletEntries", walletEntries),
+        dayCounters: await insert("dayCounters", dayCounters),
       } as Record<string, number>;
     },
   ));
@@ -2816,5 +2829,130 @@ export async function deleteWalletEntry(id: string): Promise<{ ok: boolean }> {
   const existing = await d.walletEntries.get(id);
   if (!existing) throw new ApiError("تراکنش یافت نشد", 404);
   await d.walletEntries.delete(id);
+  return { ok: true };
+}
+
+// ═════════════════════════════════════════════════════════════
+// روز شمار (Day counters) — countdown between two dates
+// ═════════════════════════════════════════════════════════════
+
+function dayCounterDTO(row: DayCounterRow): DayCounterDTO {
+  const c = computeDayCounter(row.startDate, row.endDate, new Date(), row.alarmEnabled, row.alarmDays);
+  return {
+    id: row.id,
+    title: row.title,
+    startDate: row.startDate,
+    endDate: row.endDate,
+    design: (DC_DESIGNS.includes(row.design) ? row.design : "RING") as DayCounterDesign,
+    alarmEnabled: row.alarmEnabled,
+    alarmDays: row.alarmDays,
+    alarmSound: row.alarmSound,
+    color: row.color,
+    createdAt: row.createdAt,
+    ...c,
+  };
+}
+
+export async function getDayCounters(): Promise<DayCounterDTO[]> {
+  const d = db();
+  const rows = await d.dayCounters.toArray();
+  return rows
+    .map(dayCounterDTO)
+    .sort((a, b) => a.remainingDays - b.remainingDays || ms(b.createdAt) - ms(a.createdAt));
+}
+
+export async function saveDayCounter(
+  payload: Record<string, unknown> & { id?: string },
+): Promise<DayCounterDTO> {
+  const d = db();
+  const { id, ...body } = payload;
+
+  const parseDesign = (v: unknown): DayCounterDesign | undefined => {
+    const s = toStr(v);
+    if (!s) return undefined;
+    return DC_DESIGNS.includes(s) ? (s as DayCounterDesign) : undefined;
+  };
+
+  const parseAlarmDays = (v: unknown): number | undefined => {
+    if (v === undefined || v === null || v === "") return undefined;
+    const n = toInt(v);
+    if (n === undefined || n < 1 || n > 999)
+      throw new ApiError("آستانه هشدار باید عددی بین ۱ تا ۹۹۹ باشد", 400);
+    return n;
+  };
+
+  if (!id) {
+    // ── POST ──
+    const title = toStr(body.title)?.trim();
+    if (!title) throw new ApiError("عنوان روز شمار الزامی است", 400);
+
+    const startDate = toDt(body.startDate);
+    const endDate = toDt(body.endDate);
+    if (!startDate) throw new ApiError("تاریخ شروع الزامی است", 400);
+    if (!endDate) throw new ApiError("تاریخ پایان الزامی است", 400);
+    if (endOfDay(endDate).getTime() < startOfDay(startDate).getTime())
+      throw new ApiError("تاریخ پایان نمی‌تواند قبل از تاریخ شروع باشد", 400);
+
+    const row: DayCounterRow = {
+      id: newId(),
+      title,
+      startDate: startDate.toISOString(),
+      endDate: endDate.toISOString(),
+      design: parseDesign(body.design) ?? "RING",
+      alarmEnabled: body.alarmEnabled === true,
+      alarmDays: parseAlarmDays(body.alarmDays) ?? 3,
+      alarmSound: body.alarmSound === true,
+      color: toStr(body.color) || "#4E9B72",
+      createdAt: new Date().toISOString(),
+    };
+    await d.dayCounters.add(row);
+    return dayCounterDTO(row);
+  }
+
+  // ── PATCH ──
+  const existing = await d.dayCounters.get(id);
+  if (!existing) throw new ApiError("روز شمار یافت نشد", 404);
+
+  const data: Partial<DayCounterRow> = {};
+  if (body.title !== undefined) {
+    const title = toStr(body.title)?.trim();
+    if (!title) throw new ApiError("عنوان روز شمار الزامی است", 400);
+    data.title = title;
+  }
+  if (body.startDate !== undefined) {
+    const startDate = toDt(body.startDate);
+    if (!startDate) throw new ApiError("تاریخ شروع نامعتبر است", 400);
+    data.startDate = startDate.toISOString();
+  }
+  if (body.endDate !== undefined) {
+    const endDate = toDt(body.endDate);
+    if (!endDate) throw new ApiError("تاریخ پایان نامعتبر است", 400);
+    data.endDate = endDate.toISOString();
+  }
+  const nextStart = data.startDate ?? existing.startDate;
+  const nextEnd = data.endDate ?? existing.endDate;
+  if (endOfDay(new Date(nextEnd)).getTime() < startOfDay(new Date(nextStart)).getTime())
+    throw new ApiError("تاریخ پایان نمی‌تواند قبل از تاریخ شروع باشد", 400);
+  if (body.design !== undefined) {
+    data.design = parseDesign(body.design) ?? existing.design;
+  }
+  if (body.alarmEnabled !== undefined) data.alarmEnabled = body.alarmEnabled === true;
+  if (body.alarmDays !== undefined) {
+    const n = parseAlarmDays(body.alarmDays);
+    if (n !== undefined) data.alarmDays = n;
+  }
+  if (body.alarmSound !== undefined) data.alarmSound = body.alarmSound === true;
+  if (body.color !== undefined) data.color = toStr(body.color) || existing.color;
+
+  const merged = { ...existing, ...data };
+  await d.dayCounters.put(merged);
+  return dayCounterDTO(merged);
+}
+
+export async function deleteDayCounter(id: string): Promise<{ ok: boolean }> {
+  const d = db();
+  const existing = await d.dayCounters.get(id);
+  if (!existing) throw new ApiError("روز شمار یافت نشد", 404);
+  await d.dayCounters.delete(id);
   return { ok: true };
 }

@@ -36,6 +36,9 @@ import RecurringDetailsScreen from "./screens/RecurringDetailsScreen";
 import WalletScreen from "./screens/WalletScreen";
 import WalletFormScreen from "./screens/WalletFormScreen";
 import WalletDetailsScreen from "./screens/WalletDetailsScreen";
+import DayCounterScreen from "./screens/DayCounterScreen";
+import DayCounterFormScreen from "./screens/DayCounterFormScreen";
+import DayCounterDetailsScreen from "./screens/DayCounterDetailsScreen";
 import SavingsScreen from "./screens/SavingsScreen";
 import GoalFormScreen from "./screens/GoalFormScreen";
 import PlanningScreen from "./screens/PlanningScreen";
@@ -67,6 +70,9 @@ const SCREENS: Record<string, React.ComponentType<{ params?: Record<string, unkn
   wallet: WalletScreen,
   "wallet-form": WalletFormScreen,
   "wallet-details": WalletDetailsScreen,
+  dc: DayCounterScreen,
+  "dc-form": DayCounterFormScreen,
+  "dc-details": DayCounterDetailsScreen,
   savings: SavingsScreen,
   "goal-form": GoalFormScreen,
   planning: PlanningScreen,

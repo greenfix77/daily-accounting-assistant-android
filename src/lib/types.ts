@@ -282,3 +282,30 @@ export interface WalletsOverviewDTO {
   linkedAccounts: WalletLinkedAccountDTO[];
   recentEntries: (WalletEntryDTO & { walletTitle: string })[];
 }
+
+// ── Day counters (روز شمار) ─────────────────────────────────
+
+export type DayCounterDesign = "RING" | "FLIP" | "BAR";
+export type DayCounterStatus = "NOT_STARTED" | "ACTIVE" | "FINISHED";
+export type DayCounterAlarmLevel = "NONE" | "NEAR" | "TODAY" | "OVER";
+
+/** روز شمار — countdown between two user-chosen dates with a configurable alarm. */
+export interface DayCounterDTO {
+  id: string;
+  title: string;
+  startDate: string; // ISO
+  endDate: string; // ISO
+  design: DayCounterDesign;
+  alarmEnabled: boolean;
+  alarmDays: number;
+  alarmSound: boolean;
+  color: string;
+  createdAt: string;
+  // computed (at fetch time; UI recomputes live)
+  totalDays: number;
+  elapsedDays: number;
+  remainingDays: number;
+  percent: number;
+  status: DayCounterStatus;
+  alarmLevel: DayCounterAlarmLevel;
+}

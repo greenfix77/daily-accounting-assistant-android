@@ -171,6 +171,19 @@ export interface WalletEntryRow {
   createdAt: string; // ISO
 }
 
+export interface DayCounterRow {
+  id: string;
+  title: string;
+  startDate: string; // ISO — شروع بازه شمارش
+  endDate: string; // ISO — تاریخ پایان (رویداد)
+  design: string; // RING | FLIP | BAR — طراحی کانتر
+  alarmEnabled: boolean;
+  alarmDays: number; // آستانه هشدار (تعداد روز مانده)
+  alarmSound: boolean; // پخش بوق هنگام هشدار
+  color: string;
+  createdAt: string; // ISO
+}
+
 // ── Dexie database ───────────────────────────────────────────
 
 export class HesabyarDB extends Dexie {
@@ -187,6 +200,7 @@ export class HesabyarDB extends Dexie {
   reminders!: Table<ReminderRow, string>;
   wallets!: Table<WalletRow, string>;
   walletEntries!: Table<WalletEntryRow, string>;
+  dayCounters!: Table<DayCounterRow, string>;
 
   constructor() {
     super("hesabyar-reyra");
@@ -207,6 +221,9 @@ export class HesabyarDB extends Dexie {
     this.version(2).stores({
       wallets: "id",
       walletEntries: "id, walletId, date",
+    });
+    this.version(3).stores({
+      dayCounters: "id",
     });
   }
 }
