@@ -31,6 +31,7 @@ export interface ProfileRow {
   biometricLock: boolean;
   notificationsEnabled: boolean;
   dayCounterOnHome: boolean;
+  homeWidgets: string; // JSON: {order:string[], off:string[]}
   onboarded: boolean;
   createdAt: string; // ISO
 }

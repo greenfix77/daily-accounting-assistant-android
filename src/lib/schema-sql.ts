@@ -17,6 +17,7 @@ CREATE TABLE "Profile" (
     "biometricLock" BOOLEAN NOT NULL DEFAULT false,
     "notificationsEnabled" BOOLEAN NOT NULL DEFAULT true,
     "dayCounterOnHome" BOOLEAN NOT NULL DEFAULT false,
+    "homeWidgets" TEXT NOT NULL DEFAULT '',
     "onboarded" BOOLEAN NOT NULL DEFAULT false,
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );

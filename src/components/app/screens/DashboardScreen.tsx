@@ -13,13 +13,33 @@ import {
   CalendarClock,
 } from "lucide-react";
 import {
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  useSortable,
+  verticalListSortingStrategy,
+  arrayMove,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+import {
   useAppFormat,
   AmountText,
   IconBubble,
   ProgressBar,
 } from "@/components/app/ui";
-import { useDashboard, useSettings, useReminders, useDayCounters } from "@/lib/hooks";
+import { useDashboard, useSettings, useReminders, useDayCounters, useUpdateSettings } from "@/lib/hooks";
 import { CounterDisplay } from "@/components/app/screens/DayCounterWidgets";
+import {
+  parseHomeWidgets,
+  serializeHomeWidgets,
+  type HomeWidgetId,
+} from "@/lib/home-widgets";
 import { useAppStore } from "@/lib/store";
 import { WEEKDAY_NAMES_FA, WEEKDAY_NAMES_EN } from "@/lib/jalali";
 import type { TransactionDTO, UpcomingDTO } from "@/lib/types";
@@ -94,6 +114,31 @@ function UpcomingRow({ item }: { item: UpcomingDTO }) {
   );
 }
 
+// ── Sortable wrapper: long-press (250ms) then drag to reorder ──
+function SortableCard({ id, children }: { id: string; children: React.ReactNode }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id,
+  });
+  return (
+    <div
+      ref={setNodeRef}
+      {...attributes}
+      {...listeners}
+      style={{
+        transform: CSS.Transform.toString(transform),
+        transition,
+        touchAction: "manipulation",
+      }}
+      className={cn(
+        "relative select-none",
+        isDragging && "z-20 opacity-90 scale-[1.01] drop-shadow-lg"
+      )}
+    >
+      {children}
+    </div>
+  );
+}
+
 export default function DashboardScreen({ params }: { params?: Record<string, unknown> }) {
   void params;
   const f = useAppFormat();
@@ -101,12 +146,56 @@ export default function DashboardScreen({ params }: { params?: Record<string, un
   const { data: d, isLoading } = useDashboard();
   const { data: pendingReminders } = useReminders(true);
   const { data: dayCounters } = useDayCounters();
+  const updateSettings = useUpdateSettings();
 
-  // «روشن کردن روزشمار» از تنظیمات + نزدیک‌ترین شمارندهٔ فعال
+  const budget = d?.budget ?? null;
+
+  // نزدیک‌ترین شمارندهٔ فعال — نمایشش با سیستم ویجت‌ها کنترل می‌شود
   const homeCounter =
-    settings?.dayCounterOnHome && dayCounters && dayCounters.length > 0
+    dayCounters && dayCounters.length > 0
       ? dayCounters.find((c) => c.status === "ACTIVE") ?? dayCounters[0]
       : null;
+
+  // ── ویجت‌های صفحه اصلی: ترتیب + روشن/خاموش (پایدار در پروفایل) ──
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { delay: 250, tolerance: 8 } })
+  );
+  const parsedWidgets = React.useMemo(
+    () => parseHomeWidgets(settings?.homeWidgets, settings?.dayCounterOnHome),
+    [settings?.homeWidgets, settings?.dayCounterOnHome]
+  );
+  const [widgets, setWidgets] = React.useState(parsedWidgets);
+  React.useEffect(() => {
+    setWidgets(parsedWidgets);
+  }, [parsedWidgets]);
+
+  const onDragEnd = React.useCallback(
+    (e: DragEndEvent) => {
+      const { active, over } = e;
+      if (!over || active.id === over.id) return;
+      const from = widgets.order.indexOf(active.id as HomeWidgetId);
+      const to = widgets.order.indexOf(over.id as HomeWidgetId);
+      if (from < 0 || to < 0) return;
+      const next = { order: arrayMove(widgets.order, from, to), off: widgets.off };
+      setWidgets(next);
+      updateSettings.mutate({ homeWidgets: serializeHomeWidgets(next) });
+    },
+    [widgets, updateSettings]
+  );
+
+  const widgetOn = React.useCallback(
+    (id: HomeWidgetId) => !widgets.off.includes(id),
+    [widgets.off]
+  );
+  const debtsOn = !widgets.off.includes("debts");
+  const goalsOn = !widgets.off.includes("goals");
+
+  const visibleOrder = widgets.order.filter((id) => {
+    if (id === "budget") return widgetOn("budget") && !!budget && budget.total > 0;
+    if (id === "summary") return widgetOn("summary") && (debtsOn || goalsOn);
+    if (id === "dayCounter") return widgetOn("dayCounter") && !!homeCounter;
+    return widgetOn(id);
+  });
   const push = useAppStore((s) => s.push);
   const setTab = useAppStore((s) => s.setTab);
   const [show, setShow] = React.useState(true);
@@ -121,8 +210,6 @@ export default function DashboardScreen({ params }: { params?: Record<string, un
     const wdName = f.lang === "fa" ? WEEKDAY_NAMES_FA[wd] : (WEEKDAY_NAMES_EN[wd] ?? "");
     return `${wdName} ${f.dateLong(now)}`.trim();
   }, [f]);
-
-  const budget = d?.budget ?? null;
 
   return (
     <div className="flex-1 flex flex-col min-h-0 bg-background">
@@ -206,160 +293,175 @@ export default function DashboardScreen({ params }: { params?: Record<string, un
               </div>
             </div>
 
-            {/* ── Budget ── */}
-            {budget && budget.total > 0 && (
-              <button
-                onClick={() => push("budget")}
-                className="w-full text-start bg-card rounded-3xl p-4 card-soft flex flex-col gap-2.5"
-              >
-                <div className="flex items-center justify-between">
-                  <span className="font-bold text-[14px] text-foreground">
-                    {f.t("dash.monthBudget")}
-                  </span>
-                  <span
-                    className={cn(
-                      "num-input text-[13px] font-extrabold",
-                      budget.percent >= 100 ? "text-expense" : budget.percent >= 80 ? "text-warn" : "text-primary"
-                    )}
-                  >
-                    {f.fa(budget.percent)}%
-                  </span>
-                </div>
-                <ProgressBar value={budget.percent} />
-                <p className="text-[11px] text-muted-foreground">
-                  {f.t("dash.budgetUsed")}{" "}
-                  <span className="num-input font-semibold" dir="ltr">
-                    {f.money(budget.spent)} / {f.money(budget.total)}
-                  </span>
-                </p>
-              </button>
-            )}
-
-            {/* ── Recent transactions ── */}
-            <div className="bg-card rounded-3xl p-4 card-soft">
-              <div className="flex items-center justify-between mb-1">
-                <p className="font-bold text-[14px] text-foreground">{f.t("dash.recentTx")}</p>
-                <button
-                  onClick={() => setTab("transactions")}
-                  className="text-primary text-[12px] font-bold"
-                >
-                  {f.t("dash.viewAll")}
-                </button>
-              </div>
-              {d.recent.length === 0 ? (
-                <p className="text-[12px] text-muted-foreground text-center py-6">
-                  {f.t("common.empty")}
-                </p>
-              ) : (
-                <div className="flex flex-col divide-y divide-border/50">
-                  {d.recent.slice(0, 6).map((tx) => (
-                    <TxRow key={tx.id} tx={tx} />
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* ── Upcoming payments ── */}
-            <div className="bg-card rounded-3xl p-4 card-soft">
-              <p className="font-bold text-[14px] text-foreground mb-1">{f.t("dash.upcoming")}</p>
-              {d.upcoming.length === 0 ? (
-                <p className="text-[12px] text-muted-foreground text-center py-6">
-                  {f.t("dash.noUpcoming")}
-                </p>
-              ) : (
-                <div className="flex flex-col divide-y divide-border/50">
-                  {d.upcoming.slice(0, 3).map((u) => (
-                    <UpcomingRow key={`${u.kind}-${u.id}`} item={u} />
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* ── Debts + Goals ── */}
-            <div className="grid grid-cols-2 gap-3">
-              <button
-                onClick={() => push("debts")}
-                className="text-start bg-card rounded-3xl p-4 card-soft flex flex-col gap-3"
-              >
-                <p className="font-bold text-[13px] text-foreground">{f.t("dash.debtsSummary")}</p>
-                <div className="flex flex-col gap-2">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-[11px] text-muted-foreground">{f.t("dash.owedToMe")}</span>
-                    <span className="num-input text-[12px] font-bold text-income" dir="ltr">
-                      {f.money(d.debts.owedToMe, false)}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-[11px] text-muted-foreground">{f.t("dash.iOwe")}</span>
-                    <span className="num-input text-[12px] font-bold text-expense" dir="ltr">
-                      {f.money(d.debts.iOwe, false)}
-                    </span>
-                  </div>
-                </div>
-              </button>
-              <button
-                onClick={() => push("savings")}
-                className="text-start bg-card rounded-3xl p-4 card-soft flex flex-col gap-3"
-              >
-                <p className="font-bold text-[13px] text-foreground">{f.t("dash.goals")}</p>
-                {d.goals.length === 0 ? (
-                  <p className="text-[11px] text-muted-foreground">{f.t("common.empty")}</p>
-                ) : (
-                  <div className="flex flex-col gap-2.5">
-                    {d.goals.slice(0, 2).map((g) => (
-                      <div key={g.id} className="flex flex-col gap-1">
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="text-[12px] font-semibold text-foreground truncate">{g.name}</span>
-                          <span className="num-input text-[10px] text-muted-foreground">
-                            {f.fa(g.percent)}%
+            {/* ── ویجت‌ها: قابل خاموش/روشن در تنظیمات + جابجایی با نگه‌داشتن انگشت ── */}
+            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
+              <SortableContext items={visibleOrder} strategy={verticalListSortingStrategy}>
+                {visibleOrder.map((wid) => (
+                  <SortableCard key={wid} id={wid}>
+                    {wid === "budget" && (
+                      <button
+                        onClick={() => push("budget")}
+                        className="w-full text-start bg-card rounded-3xl p-4 card-soft flex flex-col gap-2.5"
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="font-bold text-[14px] text-foreground">
+                            {f.t("dash.monthBudget")}
+                          </span>
+                          <span
+                            className={cn(
+                              "num-input text-[13px] font-extrabold",
+                              budget.percent >= 100 ? "text-expense" : budget.percent >= 80 ? "text-warn" : "text-primary"
+                            )}
+                          >
+                            {f.fa(budget.percent)}%
                           </span>
                         </div>
-                        <ProgressBar value={g.percent} fixedColor={g.color} className="h-1.5" />
+                        <ProgressBar value={budget.percent} />
+                        <p className="text-[11px] text-muted-foreground">
+                          {f.t("dash.budgetUsed")}{" "}
+                          <span className="num-input font-semibold" dir="ltr">
+                            {f.money(budget.spent)} / {f.money(budget.total)}
+                          </span>
+                        </p>
+                      </button>
+                    )}
+
+                    {wid === "recentTx" && (
+                      <div className="bg-card rounded-3xl p-4 card-soft">
+                        <div className="flex items-center justify-between mb-1">
+                          <p className="font-bold text-[14px] text-foreground">{f.t("dash.recentTx")}</p>
+                          <button
+                            onClick={() => setTab("transactions")}
+                            className="text-primary text-[12px] font-bold"
+                          >
+                            {f.t("dash.viewAll")}
+                          </button>
+                        </div>
+                        {d.recent.length === 0 ? (
+                          <p className="text-[12px] text-muted-foreground text-center py-6">
+                            {f.t("common.empty")}
+                          </p>
+                        ) : (
+                          <div className="flex flex-col divide-y divide-border/50">
+                            {d.recent.slice(0, 6).map((tx) => (
+                              <TxRow key={tx.id} tx={tx} />
+                            ))}
+                          </div>
+                        )}
                       </div>
-                    ))}
-                  </div>
-                )}
-              </button>
-            </div>
+                    )}
 
-            {/* ── Day counter (اگر در تنظیمات فعال شده باشد) ── */}
-            {homeCounter && (
-              <button
-                onClick={() => push("dc-details", { id: homeCounter.id })}
-                className="w-full text-start bg-card rounded-3xl p-4 card-soft flex flex-col gap-3 hover:bg-accent/30 active:scale-[0.99] transition-all"
-                aria-label={`${f.t("dc.title")} — ${homeCounter.title}`}
-              >
-                <div className="flex items-center gap-2.5">
-                  <span
-                    className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
-                    style={{
-                      backgroundColor: `${homeCounter.color}1f`,
-                      color: homeCounter.color,
-                    }}
-                  >
-                    <CalendarClock className="w-4.5 h-4.5" />
-                  </span>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-bold text-[14px] text-foreground truncate">{homeCounter.title}</p>
-                    <p className="text-[11px] text-muted-foreground">{f.t("dash.dayCounter")}</p>
-                  </div>
-                </div>
-                <CounterDisplay
-                  startIso={homeCounter.startDate}
-                  endIso={homeCounter.endDate}
-                  design={homeCounter.design}
-                  color={homeCounter.color}
-                  size="sm"
-                />
-              </button>
-            )}
+                    {wid === "upcoming" && (
+                      <div className="bg-card rounded-3xl p-4 card-soft">
+                        <p className="font-bold text-[14px] text-foreground mb-1">{f.t("dash.upcoming")}</p>
+                        {d.upcoming.length === 0 ? (
+                          <p className="text-[12px] text-muted-foreground text-center py-6">
+                            {f.t("dash.noUpcoming")}
+                          </p>
+                        ) : (
+                          <div className="flex flex-col divide-y divide-border/50">
+                            {d.upcoming.slice(0, 3).map((u) => (
+                              <UpcomingRow key={`${u.kind}-${u.id}`} item={u} />
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
 
-            {/* ── Prices (قیمت لحظه‌ای طلا، دلار و…) — فعلاً خالی ── */}
-            <div className="bg-card rounded-3xl p-4 card-soft" aria-label={f.t("dash.prices")}>
-              <p className="font-bold text-[14px] text-foreground mb-1">{f.t("dash.prices")}</p>
-              {/* reserved empty area — live asset prices (gold, USD, …) will land here */}
-              <div className="h-[190px]" aria-hidden="true" />
-            </div>
+                    {wid === "summary" && (
+                      <div className={cn("grid gap-3", debtsOn && goalsOn ? "grid-cols-2" : "grid-cols-1")}>
+                        {debtsOn && (
+                          <button
+                            onClick={() => push("debts")}
+                            className="text-start bg-card rounded-3xl p-4 card-soft flex flex-col gap-3"
+                          >
+                            <p className="font-bold text-[13px] text-foreground">{f.t("dash.debtsSummary")}</p>
+                            <div className="flex flex-col gap-2">
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="text-[11px] text-muted-foreground">{f.t("dash.owedToMe")}</span>
+                                <span className="num-input text-[12px] font-bold text-income" dir="ltr">
+                                  {f.money(d.debts.owedToMe, false)}
+                                </span>
+                              </div>
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="text-[11px] text-muted-foreground">{f.t("dash.iOwe")}</span>
+                                <span className="num-input text-[12px] font-bold text-expense" dir="ltr">
+                                  {f.money(d.debts.iOwe, false)}
+                                </span>
+                              </div>
+                            </div>
+                          </button>
+                        )}
+                        {goalsOn && (
+                          <button
+                            onClick={() => push("savings")}
+                            className="text-start bg-card rounded-3xl p-4 card-soft flex flex-col gap-3"
+                          >
+                            <p className="font-bold text-[13px] text-foreground">{f.t("dash.goals")}</p>
+                            {d.goals.length === 0 ? (
+                              <p className="text-[11px] text-muted-foreground">{f.t("common.empty")}</p>
+                            ) : (
+                              <div className="flex flex-col gap-2.5">
+                                {d.goals.slice(0, 2).map((g) => (
+                                  <div key={g.id} className="flex flex-col gap-1">
+                                    <div className="flex items-center justify-between gap-2">
+                                      <span className="text-[12px] font-semibold text-foreground truncate">{g.name}</span>
+                                      <span className="num-input text-[10px] text-muted-foreground">
+                                        {f.fa(g.percent)}%
+                                      </span>
+                                    </div>
+                                    <ProgressBar value={g.percent} fixedColor={g.color} className="h-1.5" />
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </button>
+                        )}
+                      </div>
+                    )}
+
+                    {wid === "dayCounter" && homeCounter && (
+                      <button
+                        onClick={() => push("dc-details", { id: homeCounter.id })}
+                        className="w-full text-start bg-card rounded-3xl p-4 card-soft flex flex-col gap-3 hover:bg-accent/30 active:scale-[0.99] transition-all"
+                        aria-label={`${f.t("dc.title")} — ${homeCounter.title}`}
+                      >
+                        <div className="flex items-center gap-2.5">
+                          <span
+                            className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
+                            style={{
+                              backgroundColor: `${homeCounter.color}1f`,
+                              color: homeCounter.color,
+                            }}
+                          >
+                            <CalendarClock className="w-4.5 h-4.5" />
+                          </span>
+                          <div className="flex-1 min-w-0">
+                            <p className="font-bold text-[14px] text-foreground truncate">{homeCounter.title}</p>
+                            <p className="text-[11px] text-muted-foreground">{f.t("dash.dayCounter")}</p>
+                          </div>
+                        </div>
+                        <CounterDisplay
+                          startIso={homeCounter.startDate}
+                          endIso={homeCounter.endDate}
+                          design={homeCounter.design}
+                          color={homeCounter.color}
+                          size="sm"
+                        />
+                      </button>
+                    )}
+
+                    {wid === "prices" && (
+                      <div className="bg-card rounded-3xl p-4 card-soft" aria-label={f.t("dash.prices")}>
+                        <p className="font-bold text-[14px] text-foreground mb-1">{f.t("dash.prices")}</p>
+                        {/* reserved empty area — live asset prices (gold, USD, …) will land here */}
+                        <div className="h-[190px]" aria-hidden="true" />
+                      </div>
+                    )}
+                  </SortableCard>
+                ))}
+              </SortableContext>
+            </DndContext>
           </>
         )}
       </div>

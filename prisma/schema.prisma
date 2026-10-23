@@ -22,6 +22,7 @@ model Profile {
   biometricLock        Boolean  @default(false)
   notificationsEnabled Boolean  @default(true)
   dayCounterOnHome     Boolean  @default(false)
+  homeWidgets          String   @default("")
   onboarded            Boolean  @default(false)
   createdAt            DateTime @default(now())
 }

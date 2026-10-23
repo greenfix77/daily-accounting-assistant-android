@@ -115,7 +115,7 @@ export async function POST(req: NextRequest) {
 
     // restore profile (single-user app) if present
     if (b.profile && typeof b.profile === 'object') {
-      const p = pick([b.profile], ['id', 'name', 'email', 'avatar', 'language', 'theme', 'calendar', 'currency', 'weekStart', 'appLock', 'pin', 'notificationsEnabled', 'dayCounterOnHome', 'onboarded', 'createdAt'], ['createdAt'])[0]
+      const p = pick([b.profile], ['id', 'name', 'email', 'avatar', 'language', 'theme', 'calendar', 'currency', 'weekStart', 'appLock', 'pin', 'notificationsEnabled', 'dayCounterOnHome', 'homeWidgets', 'onboarded', 'createdAt'], ['createdAt'])[0]
       if (p) {
         await db.profile.upsert({
           where: { id: typeof p.id === 'string' ? p.id : 'main' },

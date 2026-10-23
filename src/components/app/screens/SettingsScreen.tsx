@@ -7,6 +7,11 @@ import {
   Coins,
   CalendarDays,
   CalendarClock,
+  PieChart,
+  Receipt,
+  HandCoins,
+  Target,
+  TrendingUp,
   Lock,
   Fingerprint,
   Bell,
@@ -34,6 +39,11 @@ import { cn } from "@/lib/utils";
 import type { CalType, CurrencyCode, Lang, ThemeMode } from "@/lib/types";
 import { useAppStore } from "@/lib/store";
 import { useSettings, useUpdateSettings, useDayCounters } from "@/lib/hooks";
+import {
+  parseHomeWidgets,
+  serializeHomeWidgets,
+  type HomeWidgetId,
+} from "@/lib/home-widgets";
 import { useAppFormat, ScreenHeader, PillInput, GradientButton, ConfirmDialog } from "@/components/app/ui";
 
 // ── local building blocks ────────────────────────────────────
@@ -151,6 +161,30 @@ export default function SettingsScreen({ params }: { params?: Record<string, unk
   const updateSettings = useUpdateSettings();
   const { data: dayCounters } = useDayCounters();
   const hasDayCounters = (dayCounters?.length ?? 0) > 0;
+
+  // ویجت‌های صفحه اصلی — ترتیب و وضعیت روشن/خاموش
+  const parsedWidgets = React.useMemo(
+    () => parseHomeWidgets(settings?.homeWidgets, settings?.dayCounterOnHome),
+    [settings?.homeWidgets, settings?.dayCounterOnHome]
+  );
+  const toggleWidget = (id: string) => {
+    const off = parsedWidgets.off.includes(id)
+      ? parsedWidgets.off.filter((x) => x !== id)
+      : [...parsedWidgets.off, id];
+    updateSettings.mutate({ homeWidgets: serializeHomeWidgets({ order: parsedWidgets.order, off }) });
+  };
+  const widgetIcon: Record<HomeWidgetId | "debts" | "goals", LucideIcon> = {
+    budget: PieChart,
+    recentTx: Receipt,
+    upcoming: CalendarDays,
+    summary: HandCoins,
+    debts: HandCoins,
+    goals: Target,
+    dayCounter: CalendarClock,
+    prices: TrendingUp,
+  };
+  const widgetTitle = (id: HomeWidgetId | "debts" | "goals") =>
+    f.t(id === "debts" ? "set.wgDebts" : id === "goals" ? "set.wgGoals" : `set.wg${id[0].toUpperCase()}${id.slice(1)}`);
 
   const [langOpen, setLangOpen] = React.useState(false);
   const [themeOpen, setThemeOpen] = React.useState(false);
@@ -285,22 +319,54 @@ export default function SettingsScreen({ params }: { params?: Record<string, unk
           />
         </div>
 
-        {/* Day counter on home — only offered once a counter exists */}
-        {hasDayCounters && (
-          <div className="flex flex-col gap-2.5">
-            <Row
-              icon={CalendarClock}
-              title={f.t("set.dayCounterOnHome")}
-              sub={f.t("set.dayCounterOnHomeDesc")}
-              end={
-                <Switch
-                  checked={!!settings?.dayCounterOnHome}
-                  onCheckedChange={(v) => updateSettings.mutate({ dayCounterOnHome: v })}
-                />
-              }
-            />
-          </div>
-        )}
+        {/* Home screen widgets — همه به‌جز موجودی کل و درآمد/هزینه امروز */}
+        <div className="flex flex-col gap-2.5">
+          {parsedWidgets.order.map((wid) => {
+            if (wid === "summary") {
+              return (
+                <React.Fragment key="summary-pair">
+                  <Row
+                    icon={widgetIcon.debts}
+                    title={f.t("set.wgDebts")}
+                    end={
+                      <Switch
+                        checked={!parsedWidgets.off.includes("debts")}
+                        onCheckedChange={() => toggleWidget("debts")}
+                      />
+                    }
+                  />
+                  <Row
+                    icon={widgetIcon.goals}
+                    title={f.t("set.wgGoals")}
+                    end={
+                      <Switch
+                        checked={!parsedWidgets.off.includes("goals")}
+                        onCheckedChange={() => toggleWidget("goals")}
+                      />
+                    }
+                  />
+                </React.Fragment>
+              );
+            }
+            const Icon = widgetIcon[wid];
+            const isDayCounter = wid === "dayCounter";
+            return (
+              <Row
+                key={wid}
+                icon={Icon}
+                title={widgetTitle(wid)}
+                sub={isDayCounter && !hasDayCounters ? f.t("set.wgDayCounterHint") : undefined}
+                end={
+                  <Switch
+                    checked={!parsedWidgets.off.includes(wid)}
+                    disabled={isDayCounter && !hasDayCounters}
+                    onCheckedChange={() => toggleWidget(wid)}
+                  />
+                }
+              />
+            );
+          })}
+        </div>
 
         {/* Security */}
         <div className="flex flex-col gap-2.5">

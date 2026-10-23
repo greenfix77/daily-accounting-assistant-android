@@ -235,6 +235,7 @@ function profileDTO(p: ProfileRow): ProfileDTO {
     biometricLock: p.biometricLock,
     notificationsEnabled: p.notificationsEnabled,
     dayCounterOnHome: Boolean(p.dayCounterOnHome),
+    homeWidgets: p.homeWidgets ?? "",
     onboarded: p.onboarded,
     createdAt: p.createdAt,
   };
@@ -475,6 +476,7 @@ async function ensureProfile(d: HesabyarDB): Promise<ProfileRow> {
     biometricLock: false,
     notificationsEnabled: true,
     dayCounterOnHome: false,
+    homeWidgets: "",
     onboarded: false,
     createdAt: new Date().toISOString(),
   };
@@ -505,6 +507,7 @@ export async function updateSettings(patch: object): Promise<ProfileDTO> {
   if (p.biometricLock !== undefined) data.biometricLock = Boolean(p.biometricLock);
   if (p.notificationsEnabled !== undefined) data.notificationsEnabled = Boolean(p.notificationsEnabled);
   if (p.dayCounterOnHome !== undefined) data.dayCounterOnHome = Boolean(p.dayCounterOnHome);
+  if (p.homeWidgets !== undefined) data.homeWidgets = String(p.homeWidgets);
   if (p.onboarded !== undefined) data.onboarded = Boolean(p.onboarded);
 
   const profile = await ensureProfile(d);
@@ -553,6 +556,7 @@ export async function register(body: { name?: string; email?: string }): Promise
         biometricLock: false,
         notificationsEnabled: true,
         dayCounterOnHome: false,
+        homeWidgets: "",
         onboarded: true,
         createdAt: new Date().toISOString(),
       };
@@ -2509,7 +2513,7 @@ export async function restoreBackup(body: unknown): Promise<{ ok: boolean; count
   if (b.profile && typeof b.profile === "object") {
     const p = pick(
       [b.profile],
-      ["id", "name", "email", "avatar", "language", "theme", "calendar", "currency", "weekStart", "appLock", "pin", "notificationsEnabled", "dayCounterOnHome", "onboarded", "createdAt"],
+      ["id", "name", "email", "avatar", "language", "theme", "calendar", "currency", "weekStart", "appLock", "pin", "notificationsEnabled", "dayCounterOnHome", "homeWidgets", "onboarded", "createdAt"],
       ["createdAt"],
     )[0];
     if (p) {
@@ -2534,6 +2538,7 @@ export async function restoreBackup(body: unknown): Promise<{ ok: boolean; count
           biometricLock: false, // not picked → schema default
           notificationsEnabled: Boolean(p.notificationsEnabled ?? true),
           dayCounterOnHome: Boolean(p.dayCounterOnHome ?? false),
+          homeWidgets: (p.homeWidgets as string) ?? "",
           onboarded: Boolean(p.onboarded ?? false),
           createdAt: (p.createdAt as string) ?? new Date().toISOString(),
         };

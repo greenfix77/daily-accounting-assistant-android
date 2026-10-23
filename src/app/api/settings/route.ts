@@ -35,6 +35,7 @@ export async function PATCH(req: NextRequest) {
       biometricLock?: boolean
       notificationsEnabled?: boolean
       dayCounterOnHome?: boolean
+      homeWidgets?: string
       onboarded?: boolean
     } = {}
 
@@ -51,6 +52,7 @@ export async function PATCH(req: NextRequest) {
     if (body.biometricLock !== undefined) data.biometricLock = Boolean(body.biometricLock)
     if (body.notificationsEnabled !== undefined) data.notificationsEnabled = Boolean(body.notificationsEnabled)
     if (body.dayCounterOnHome !== undefined) data.dayCounterOnHome = Boolean(body.dayCounterOnHome)
+    if (body.homeWidgets !== undefined) data.homeWidgets = String(body.homeWidgets)
     if (body.onboarded !== undefined) data.onboarded = Boolean(body.onboarded)
 
     const profile = await ensureProfile()

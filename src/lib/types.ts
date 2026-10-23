@@ -30,6 +30,7 @@ export interface ProfileDTO {
   biometricLock: boolean;
   notificationsEnabled: boolean;
   dayCounterOnHome: boolean;
+  homeWidgets: string;
   onboarded: boolean;
   createdAt: string;
 }
