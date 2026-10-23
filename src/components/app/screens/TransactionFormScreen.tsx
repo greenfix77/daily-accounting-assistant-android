@@ -348,7 +348,7 @@ export default function TransactionFormScreen({ params }: { params?: Record<stri
                 <div className="grid grid-cols-2 gap-3">
                   <Field label={f.t("tx.fromAccount")}>
                     <Select value={accountId || ""} onValueChange={setAccountId}>
-                      <SelectTrigger className="h-12 rounded-2xl bg-card text-[13px] font-semibold">
+                      <SelectTrigger className="h-12 w-full rounded-2xl bg-card text-[13px] font-semibold">
                         <SelectValue placeholder={f.t("tx.selectAccount")} />
                       </SelectTrigger>
                       <SelectContent className="rounded-2xl bg-card max-h-64">
@@ -362,7 +362,7 @@ export default function TransactionFormScreen({ params }: { params?: Record<stri
                   </Field>
                   <Field label={f.t("tx.toAccount")}>
                     <Select value={toAccountId || ""} onValueChange={setToAccountId}>
-                      <SelectTrigger className="h-12 rounded-2xl bg-card text-[13px] font-semibold">
+                      <SelectTrigger className="h-12 w-full rounded-2xl bg-card text-[13px] font-semibold">
                         <SelectValue placeholder={f.t("tx.selectAccount")} />
                       </SelectTrigger>
                       <SelectContent className="rounded-2xl bg-card max-h-64">
@@ -377,7 +377,7 @@ export default function TransactionFormScreen({ params }: { params?: Record<stri
                 </div>
               ) : (
                 <Select value={accountId || ""} onValueChange={setAccountId}>
-                  <SelectTrigger className="h-12 rounded-2xl bg-card text-[13px] font-semibold">
+                  <SelectTrigger className="h-12 w-full rounded-2xl bg-card text-[13px] font-semibold">
                     <SelectValue placeholder={f.t("tx.selectAccount")} />
                   </SelectTrigger>
                   <SelectContent className="rounded-2xl bg-card max-h-64">
@@ -396,63 +396,61 @@ export default function TransactionFormScreen({ params }: { params?: Record<stri
               )
             ) : (
               <>
-                {/* کیف پول + حساب متصل — دو دراپ‌دان کنار هم (RTL: کیف راست، حساب چپ) */}
-                <div className="grid grid-cols-2 gap-3">
-                  <Field label={f.t("tx.wallet")}>
-                    <Select value={walletId || ""} onValueChange={setWalletId}>
-                      <SelectTrigger className="h-12 rounded-2xl bg-card text-[13px] font-semibold">
-                        <SelectValue placeholder={f.t("tx.selectWallet")} />
-                      </SelectTrigger>
-                      <SelectContent className="rounded-2xl bg-card max-h-64">
-                        {wallets.map((w) => (
-                          <SelectItem key={w.id} value={w.id} className="text-[13px]">
-                            <span className="flex items-center justify-between gap-3 w-full">
-                              <span className="flex items-center gap-1.5">
-                                <Wallet className="h-3.5 w-3.5 text-[#C08052]" />
-                                {w.title}
-                              </span>
-                              <span className="num-input text-[11px] text-muted-foreground">
-                                {f.money(w.balance, false)}
-                              </span>
+                {/* کیف پول + حساب متصل — عمودی زیر هم تا در عرض‌های مختلف تناسب دکمه‌ها حفظ شود */}
+                <Field label={f.t("tx.wallet")}>
+                  <Select value={walletId || ""} onValueChange={setWalletId}>
+                    <SelectTrigger className="h-12 w-full rounded-2xl bg-card text-[13px] font-semibold">
+                      <SelectValue placeholder={f.t("tx.selectWallet")} />
+                    </SelectTrigger>
+                    <SelectContent className="rounded-2xl bg-card max-h-64">
+                      {wallets.map((w) => (
+                        <SelectItem key={w.id} value={w.id} className="text-[13px]">
+                          <span className="flex items-center justify-between gap-3 w-full">
+                            <span className="flex items-center gap-1.5">
+                              <Wallet className="h-3.5 w-3.5 text-[#C08052]" />
+                              {w.title}
                             </span>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </Field>
-
-                  <Field label={f.t("tx.selectLinkedAccount")}>
-                    <Select
-                      value={walletId ? linkedAccountId || "none" : ""}
-                      onValueChange={(v) => setLinkedAccountId(v === "none" ? "" : v)}
-                      disabled={!walletId}
-                    >
-                      <SelectTrigger className="h-12 rounded-2xl bg-card text-[13px] font-semibold">
-                        <SelectValue
-                          placeholder={walletId ? f.t("tx.linkedNone") : f.t("tx.selectWalletFirst")}
-                        />
-                      </SelectTrigger>
-                      <SelectContent className="rounded-2xl bg-card max-h-64">
-                        <SelectItem value="none" className="text-[13px]">
-                          <span className="flex items-center gap-1.5">
-                            <Wallet className="h-3.5 w-3.5 text-[#C08052]" />
-                            {f.t("tx.linkedNone")}
+                            <span className="num-input text-[11px] text-muted-foreground">
+                              {f.money(w.balance, false)}
+                            </span>
                           </span>
                         </SelectItem>
-                        {linkedAccounts.map((a) => (
-                          <SelectItem key={a.id} value={a.id} className="text-[13px]">
-                            <span className="flex items-center justify-between gap-3 w-full">
-                              <span>{a.name}</span>
-                              <span className="num-input text-[11px] text-muted-foreground">
-                                {f.money(a.balance, false)}
-                              </span>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </Field>
+
+                <Field label={f.t("tx.selectLinkedAccount")}>
+                  <Select
+                    value={walletId ? linkedAccountId || "none" : ""}
+                    onValueChange={(v) => setLinkedAccountId(v === "none" ? "" : v)}
+                    disabled={!walletId}
+                  >
+                    <SelectTrigger className="h-12 w-full rounded-2xl bg-card text-[13px] font-semibold">
+                      <SelectValue
+                        placeholder={walletId ? f.t("tx.linkedNone") : f.t("tx.selectWalletFirst")}
+                      />
+                    </SelectTrigger>
+                    <SelectContent className="rounded-2xl bg-card max-h-64">
+                      <SelectItem value="none" className="text-[13px]">
+                        <span className="flex items-center gap-1.5">
+                          <Wallet className="h-3.5 w-3.5 text-[#C08052]" />
+                          {f.t("tx.linkedNone")}
+                        </span>
+                      </SelectItem>
+                      {linkedAccounts.map((a) => (
+                        <SelectItem key={a.id} value={a.id} className="text-[13px]">
+                          <span className="flex items-center justify-between gap-3 w-full">
+                            <span>{a.name}</span>
+                            <span className="num-input text-[11px] text-muted-foreground">
+                              {f.money(a.balance, false)}
                             </span>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </Field>
-                </div>
+                          </span>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </Field>
 
                 {wallets.length === 0 && (
                   <p className="text-[12px] text-muted-foreground/80 leading-5">
