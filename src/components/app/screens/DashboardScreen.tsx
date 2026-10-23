@@ -10,6 +10,7 @@ import {
   TrendingDown,
   Repeat,
   HandCoins,
+  CalendarClock,
 } from "lucide-react";
 import {
   useAppFormat,
@@ -17,7 +18,8 @@ import {
   IconBubble,
   ProgressBar,
 } from "@/components/app/ui";
-import { useDashboard, useSettings, useReminders } from "@/lib/hooks";
+import { useDashboard, useSettings, useReminders, useDayCounters } from "@/lib/hooks";
+import { CounterDisplay } from "@/components/app/screens/DayCounterWidgets";
 import { useAppStore } from "@/lib/store";
 import { WEEKDAY_NAMES_FA, WEEKDAY_NAMES_EN } from "@/lib/jalali";
 import type { TransactionDTO, UpcomingDTO } from "@/lib/types";
@@ -98,6 +100,13 @@ export default function DashboardScreen({ params }: { params?: Record<string, un
   const { data: settings } = useSettings();
   const { data: d, isLoading } = useDashboard();
   const { data: pendingReminders } = useReminders(true);
+  const { data: dayCounters } = useDayCounters();
+
+  // «روشن کردن روزشمار» از تنظیمات + نزدیک‌ترین شمارندهٔ فعال
+  const homeCounter =
+    settings?.dayCounterOnHome && dayCounters && dayCounters.length > 0
+      ? dayCounters.find((c) => c.status === "ACTIVE") ?? dayCounters[0]
+      : null;
   const push = useAppStore((s) => s.push);
   const setTab = useAppStore((s) => s.setTab);
   const [show, setShow] = React.useState(true);
@@ -312,6 +321,38 @@ export default function DashboardScreen({ params }: { params?: Record<string, un
                 )}
               </button>
             </div>
+
+            {/* ── Day counter (اگر در تنظیمات فعال شده باشد) ── */}
+            {homeCounter && (
+              <button
+                onClick={() => push("dc-details", { id: homeCounter.id })}
+                className="w-full text-start bg-card rounded-3xl p-4 card-soft flex flex-col gap-3 hover:bg-accent/30 active:scale-[0.99] transition-all"
+                aria-label={`${f.t("dc.title")} — ${homeCounter.title}`}
+              >
+                <div className="flex items-center gap-2.5">
+                  <span
+                    className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
+                    style={{
+                      backgroundColor: `${homeCounter.color}1f`,
+                      color: homeCounter.color,
+                    }}
+                  >
+                    <CalendarClock className="w-4.5 h-4.5" />
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-bold text-[14px] text-foreground truncate">{homeCounter.title}</p>
+                    <p className="text-[11px] text-muted-foreground">{f.t("dash.dayCounter")}</p>
+                  </div>
+                </div>
+                <CounterDisplay
+                  startIso={homeCounter.startDate}
+                  endIso={homeCounter.endDate}
+                  design={homeCounter.design}
+                  color={homeCounter.color}
+                  size="sm"
+                />
+              </button>
+            )}
 
             {/* ── Prices (قیمت لحظه‌ای طلا، دلار و…) — فعلاً خالی ── */}
             <div className="bg-card rounded-3xl p-4 card-soft" aria-label={f.t("dash.prices")}>

@@ -16,6 +16,7 @@ CREATE TABLE "Profile" (
     "pin" TEXT,
     "biometricLock" BOOLEAN NOT NULL DEFAULT false,
     "notificationsEnabled" BOOLEAN NOT NULL DEFAULT true,
+    "dayCounterOnHome" BOOLEAN NOT NULL DEFAULT false,
     "onboarded" BOOLEAN NOT NULL DEFAULT false,
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );

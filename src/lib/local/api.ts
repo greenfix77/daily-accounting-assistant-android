@@ -234,6 +234,7 @@ function profileDTO(p: ProfileRow): ProfileDTO {
     pin: p.pin,
     biometricLock: p.biometricLock,
     notificationsEnabled: p.notificationsEnabled,
+    dayCounterOnHome: Boolean(p.dayCounterOnHome),
     onboarded: p.onboarded,
     createdAt: p.createdAt,
   };
@@ -473,6 +474,7 @@ async function ensureProfile(d: HesabyarDB): Promise<ProfileRow> {
     pin: null,
     biometricLock: false,
     notificationsEnabled: true,
+    dayCounterOnHome: false,
     onboarded: false,
     createdAt: new Date().toISOString(),
   };
@@ -502,6 +504,7 @@ export async function updateSettings(patch: object): Promise<ProfileDTO> {
   if (p.appLock !== undefined) data.appLock = Boolean(p.appLock);
   if (p.biometricLock !== undefined) data.biometricLock = Boolean(p.biometricLock);
   if (p.notificationsEnabled !== undefined) data.notificationsEnabled = Boolean(p.notificationsEnabled);
+  if (p.dayCounterOnHome !== undefined) data.dayCounterOnHome = Boolean(p.dayCounterOnHome);
   if (p.onboarded !== undefined) data.onboarded = Boolean(p.onboarded);
 
   const profile = await ensureProfile(d);
@@ -549,6 +552,7 @@ export async function register(body: { name?: string; email?: string }): Promise
         pin: null,
         biometricLock: false,
         notificationsEnabled: true,
+        dayCounterOnHome: false,
         onboarded: true,
         createdAt: new Date().toISOString(),
       };
@@ -2505,7 +2509,7 @@ export async function restoreBackup(body: unknown): Promise<{ ok: boolean; count
   if (b.profile && typeof b.profile === "object") {
     const p = pick(
       [b.profile],
-      ["id", "name", "email", "avatar", "language", "theme", "calendar", "currency", "weekStart", "appLock", "pin", "notificationsEnabled", "onboarded", "createdAt"],
+      ["id", "name", "email", "avatar", "language", "theme", "calendar", "currency", "weekStart", "appLock", "pin", "notificationsEnabled", "dayCounterOnHome", "onboarded", "createdAt"],
       ["createdAt"],
     )[0];
     if (p) {
@@ -2529,6 +2533,7 @@ export async function restoreBackup(body: unknown): Promise<{ ok: boolean; count
           pin: (p.pin as string | null) ?? null,
           biometricLock: false, // not picked → schema default
           notificationsEnabled: Boolean(p.notificationsEnabled ?? true),
+          dayCounterOnHome: Boolean(p.dayCounterOnHome ?? false),
           onboarded: Boolean(p.onboarded ?? false),
           createdAt: (p.createdAt as string) ?? new Date().toISOString(),
         };

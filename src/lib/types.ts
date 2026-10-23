@@ -29,6 +29,7 @@ export interface ProfileDTO {
   pin: string | null;
   biometricLock: boolean;
   notificationsEnabled: boolean;
+  dayCounterOnHome: boolean;
   onboarded: boolean;
   createdAt: string;
 }

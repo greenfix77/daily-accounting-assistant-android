@@ -6,6 +6,7 @@ import {
   SunMoon,
   Coins,
   CalendarDays,
+  CalendarClock,
   Lock,
   Fingerprint,
   Bell,
@@ -32,7 +33,7 @@ import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import type { CalType, CurrencyCode, Lang, ThemeMode } from "@/lib/types";
 import { useAppStore } from "@/lib/store";
-import { useSettings, useUpdateSettings } from "@/lib/hooks";
+import { useSettings, useUpdateSettings, useDayCounters } from "@/lib/hooks";
 import { useAppFormat, ScreenHeader, PillInput, GradientButton, ConfirmDialog } from "@/components/app/ui";
 
 // ── local building blocks ────────────────────────────────────
@@ -148,6 +149,8 @@ export default function SettingsScreen({ params }: { params?: Record<string, unk
   const { push, setAuthed, popToRoot, setTab } = useAppStore();
   const { data: settings } = useSettings();
   const updateSettings = useUpdateSettings();
+  const { data: dayCounters } = useDayCounters();
+  const hasDayCounters = (dayCounters?.length ?? 0) > 0;
 
   const [langOpen, setLangOpen] = React.useState(false);
   const [themeOpen, setThemeOpen] = React.useState(false);
@@ -281,6 +284,23 @@ export default function SettingsScreen({ params }: { params?: Record<string, unk
             onClick={() => setCalOpen(true)}
           />
         </div>
+
+        {/* Day counter on home — only offered once a counter exists */}
+        {hasDayCounters && (
+          <div className="flex flex-col gap-2.5">
+            <Row
+              icon={CalendarClock}
+              title={f.t("set.dayCounterOnHome")}
+              sub={f.t("set.dayCounterOnHomeDesc")}
+              end={
+                <Switch
+                  checked={!!settings?.dayCounterOnHome}
+                  onCheckedChange={(v) => updateSettings.mutate({ dayCounterOnHome: v })}
+                />
+              }
+            />
+          </div>
+        )}
 
         {/* Security */}
         <div className="flex flex-col gap-2.5">

@@ -21,6 +21,7 @@ model Profile {
   pin                  String?
   biometricLock        Boolean  @default(false)
   notificationsEnabled Boolean  @default(true)
+  dayCounterOnHome     Boolean  @default(false)
   onboarded            Boolean  @default(false)
   createdAt            DateTime @default(now())
 }
