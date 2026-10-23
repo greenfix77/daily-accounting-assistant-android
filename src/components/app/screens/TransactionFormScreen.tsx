@@ -396,46 +396,41 @@ export default function TransactionFormScreen({ params }: { params?: Record<stri
               )
             ) : (
               <>
-                {/* Wallet select */}
-                <Select value={walletId || ""} onValueChange={setWalletId}>
-                  <SelectTrigger className="h-12 rounded-2xl bg-card text-[13px] font-semibold">
-                    <SelectValue placeholder={f.t("tx.selectWallet")} />
-                  </SelectTrigger>
-                  <SelectContent className="rounded-2xl bg-card max-h-64">
-                    {wallets.map((w) => (
-                      <SelectItem key={w.id} value={w.id} className="text-[13px]">
-                        <span className="flex items-center justify-between gap-3 w-full">
-                          <span className="flex items-center gap-1.5">
-                            <Wallet className="h-3.5 w-3.5 text-[#C08052]" />
-                            {w.title}
-                          </span>
-                          <span className="num-input text-[11px] text-muted-foreground">
-                            {f.money(w.balance, false)}
-                          </span>
-                        </span>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                {/* کیف پول + حساب متصل — دو دراپ‌دان کنار هم (RTL: کیف راست، حساب چپ) */}
+                <div className="grid grid-cols-2 gap-3">
+                  <Field label={f.t("tx.wallet")}>
+                    <Select value={walletId || ""} onValueChange={setWalletId}>
+                      <SelectTrigger className="h-12 rounded-2xl bg-card text-[13px] font-semibold">
+                        <SelectValue placeholder={f.t("tx.selectWallet")} />
+                      </SelectTrigger>
+                      <SelectContent className="rounded-2xl bg-card max-h-64">
+                        {wallets.map((w) => (
+                          <SelectItem key={w.id} value={w.id} className="text-[13px]">
+                            <span className="flex items-center justify-between gap-3 w-full">
+                              <span className="flex items-center gap-1.5">
+                                <Wallet className="h-3.5 w-3.5 text-[#C08052]" />
+                                {w.title}
+                              </span>
+                              <span className="num-input text-[11px] text-muted-foreground">
+                                {f.money(w.balance, false)}
+                              </span>
+                            </span>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </Field>
 
-                {wallets.length === 0 && (
-                  <p className="text-[12px] text-muted-foreground/80 leading-5">
-                    {f.t("tx.noWallets")}
-                  </p>
-                )}
-
-                {/* Linked accounts (optional) — «هیچکدام» = wallet-only */}
-                {walletId && (
-                  <div className="flex flex-col gap-1.5 rounded-2xl border border-dashed border-border bg-secondary/30 p-3">
-                    <span className="text-[12px] font-semibold text-foreground/80">
-                      {f.t("tx.linkedAccountsOptional")}
-                    </span>
+                  <Field label={f.t("tx.selectLinkedAccount")}>
                     <Select
-                      value={linkedAccountId ? linkedAccountId : "none"}
+                      value={walletId ? linkedAccountId || "none" : ""}
                       onValueChange={(v) => setLinkedAccountId(v === "none" ? "" : v)}
+                      disabled={!walletId}
                     >
-                      <SelectTrigger className="h-11 rounded-2xl bg-card text-[13px] font-semibold">
-                        <SelectValue placeholder={f.t("tx.linkedNone")} />
+                      <SelectTrigger className="h-12 rounded-2xl bg-card text-[13px] font-semibold">
+                        <SelectValue
+                          placeholder={walletId ? f.t("tx.linkedNone") : f.t("tx.selectWalletFirst")}
+                        />
                       </SelectTrigger>
                       <SelectContent className="rounded-2xl bg-card max-h-64">
                         <SelectItem value="none" className="text-[13px]">
@@ -456,10 +451,20 @@ export default function TransactionFormScreen({ params }: { params?: Record<stri
                         ))}
                       </SelectContent>
                     </Select>
-                    <p className="text-[11px] leading-5 text-muted-foreground/90">
-                      {linkedAccountId ? f.t("tx.linkedHint") : f.t("tx.linkedNoneDesc")}
-                    </p>
-                  </div>
+                  </Field>
+                </div>
+
+                {wallets.length === 0 && (
+                  <p className="text-[12px] text-muted-foreground/80 leading-5">
+                    {f.t("tx.noWallets")}
+                  </p>
+                )}
+
+                {/* hint پویا: با حساب متصل، مبلغ همزمان از کیف و حساب کم/اضافه می‌شود */}
+                {walletId && (
+                  <p className="text-[11px] leading-5 text-muted-foreground/90">
+                    {linkedAccountId ? f.t("tx.linkedHint") : f.t("tx.linkedNoneDesc")}
+                  </p>
                 )}
               </>
             )}
