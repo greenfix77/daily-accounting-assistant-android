@@ -254,6 +254,8 @@ export interface WalletEntryDTO {
   note: string | null;
   date: string; // ISO
   createdAt: string;
+  /** paired main transaction id when this entry was created via the transaction form with a linked account (null = wallet-only row) */
+  txId: string | null;
 }
 
 export interface WalletLinkedAccountDTO {

@@ -40,6 +40,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
+  useDeleteTransaction,
   useDeleteWallet,
   useDeleteWalletEntry,
   useSaveWalletEntry,
@@ -49,7 +50,7 @@ import {
 import { useAppStore } from "@/lib/store";
 import { formatAmountInput, parseAmountInput, formatMoneyShort } from "@/lib/format";
 import { startOfDay, toEnDigits } from "@/lib/jalali";
-import type { WalletEntryType } from "@/lib/types";
+import type { WalletEntryDTO, WalletEntryType } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 const WALLET_COLOR = "#C08052";
@@ -93,20 +94,24 @@ export default function WalletDetailsScreen({ params }: { params?: Record<string
   const { data: entries = [], isLoading: entriesLoading } = useWalletEntries(id);
   const saveEntry = useSaveWalletEntry();
   const deleteEntry = useDeleteWalletEntry();
+  const deleteTx = useDeleteTransaction();
 
   const wallet = React.useMemo(() => ov?.wallets.find((w) => w.id === id), [ov, id]);
   const deleteWallet = useDeleteWallet();
 
   const [entryOpen, setEntryOpen] = React.useState(false);
+  const [editingEntryId, setEditingEntryId] = React.useState<string | null>(null);
   const [entryType, setEntryType] = React.useState<WalletEntryType>("OUT");
   const [entryAmount, setEntryAmount] = React.useState("");
   const [entryNote, setEntryNote] = React.useState("");
   const [entryDate, setEntryDate] = React.useState<Date>(new Date());
 
   const [deleteEntryId, setDeleteEntryId] = React.useState<string | null>(null);
+  const [txDeleteId, setTxDeleteId] = React.useState<string | null>(null);
   const [confirmDeleteWallet, setConfirmDeleteWallet] = React.useState(false);
 
   const openEntry = (type: WalletEntryType) => {
+    setEditingEntryId(null);
     setEntryType(type);
     setEntryAmount("");
     setEntryNote("");
@@ -114,21 +119,45 @@ export default function WalletDetailsScreen({ params }: { params?: Record<string
     setEntryOpen(true);
   };
 
+  const openEdit = (e: WalletEntryDTO) => {
+    setEditingEntryId(e.id);
+    setEntryType(e.type);
+    setEntryAmount(formatAmountInput(String(e.amount), f.lang));
+    setEntryNote(e.note ?? "");
+    setEntryDate(new Date(e.date));
+    setEntryOpen(true);
+  };
+
   const submitEntry = () => {
-    if (!id) return;
     const amt = parseAmountInput(toEnDigits(entryAmount));
     if (amt <= 0) {
       toast.error(f.t("common.required"));
       return;
     }
+    const payload = {
+      type: entryType,
+      amount: amt,
+      note: entryNote.trim() || null,
+      date: startOfDay(entryDate).toISOString(),
+    };
+    if (editingEntryId) {
+      // ── edit (wallet-only rows) ──
+      saveEntry.mutate(
+        { id: editingEntryId, ...payload },
+        {
+          onSuccess: () => {
+            toast.success(f.t("wal.entryUpdated"));
+            setEntryOpen(false);
+            setEditingEntryId(null);
+          },
+          onError: (err) => toast.error(err.message),
+        }
+      );
+      return;
+    }
+    if (!id) return;
     saveEntry.mutate(
-      {
-        walletId: id,
-        type: entryType,
-        amount: amt,
-        note: entryNote.trim() || null,
-        date: startOfDay(entryDate).toISOString(),
-      },
+      { walletId: id, ...payload },
       {
         onSuccess: () => {
           toast.success(f.t("wal.entryAdded"));
@@ -137,6 +166,13 @@ export default function WalletDetailsScreen({ params }: { params?: Record<string
         onError: (err) => toast.error(err.message),
       }
     );
+  };
+
+  const openRow = (e: WalletEntryDTO) => {
+    // paired row (created via transaction form with a linked account) → edit the
+    // main transaction so wallet + account stay in sync; wallet-only → inline edit
+    if (e.txId) push("transaction-form", { mode: "edit", id: e.txId });
+    else openEdit(e);
   };
 
   if (isLoading) {
@@ -391,7 +427,20 @@ export default function WalletDetailsScreen({ params }: { params?: Record<string
           ) : (
             <div className="bg-card rounded-2xl card-soft px-4 flex flex-col divide-y divide-border/50 max-h-96 overflow-y-auto app-screen-scroll">
               {entries.map((e) => (
-                <div key={e.id} className="py-3 flex items-center gap-3">
+                <div
+                  key={e.id}
+                  role="button"
+                  tabIndex={0}
+                  aria-label={e.txId ? f.t("common.edit") : f.t("wal.editEntry")}
+                  onClick={() => openRow(e)}
+                  onKeyDown={(ev) => {
+                    if (ev.key === "Enter" || ev.key === " ") {
+                      ev.preventDefault();
+                      openRow(e);
+                    }
+                  }}
+                  className="py-3 flex items-center gap-3 cursor-pointer hover:bg-secondary/40 focus:bg-secondary/40 focus:outline-none transition-colors"
+                >
                   <span
                     className={cn(
                       "flex items-center justify-center w-8 h-8 rounded-xl shrink-0",
@@ -426,7 +475,11 @@ export default function WalletDetailsScreen({ params }: { params?: Record<string
                   <button
                     type="button"
                     aria-label={f.t("common.delete")}
-                    onClick={() => setDeleteEntryId(e.id)}
+                    onClick={(ev) => {
+                      ev.stopPropagation();
+                      if (e.txId) setTxDeleteId(e.txId);
+                      else setDeleteEntryId(e.id);
+                    }}
                     className="w-8 h-8 rounded-full flex items-center justify-center text-muted-foreground hover:bg-expense-soft hover:text-expense transition-colors shrink-0"
                   >
                     <Trash2 className="w-4 h-4" />
@@ -445,7 +498,9 @@ export default function WalletDetailsScreen({ params }: { params?: Record<string
           dir="rtl"
         >
           <DialogHeader>
-            <DialogTitle className="text-[16px] text-start">{f.t("wal.addEntry")}</DialogTitle>
+            <DialogTitle className="text-[16px] text-start">
+              {editingEntryId ? f.t("wal.editEntry") : f.t("wal.addEntry")}
+            </DialogTitle>
           </DialogHeader>
           <div className="flex flex-col gap-3 pt-1">
             <Field label={f.t("wal.entryType")} required>
@@ -490,14 +545,14 @@ export default function WalletDetailsScreen({ params }: { params?: Record<string
               disabled={saveEntry.isPending}
               className="h-12 rounded-2xl app-gradient text-white text-[14px] font-bold shadow-md shadow-primary/25 disabled:opacity-60 inline-flex items-center justify-center gap-2"
             >
-              <Plus className="w-4 h-4" />
-              {f.t("wal.addEntry")}
+              {editingEntryId ? <Pencil className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
+              {editingEntryId ? f.t("common.save") : f.t("wal.addEntry")}
             </button>
           </div>
         </DialogContent>
       </Dialog>
 
-      {/* ── confirm delete entry ── */}
+      {/* ── confirm delete entry (wallet-only rows) ── */}
       <ConfirmDialog
         open={!!deleteEntryId}
         onOpenChange={(v) => !v && setDeleteEntryId(null)}
@@ -512,6 +567,23 @@ export default function WalletDetailsScreen({ params }: { params?: Record<string
           });
         }}
         title={f.t("wal.entryDeleteConfirm")}
+      />
+
+      {/* ── confirm delete paired main transaction (linked-account rows) ── */}
+      <ConfirmDialog
+        open={!!txDeleteId}
+        onOpenChange={(v) => !v && setTxDeleteId(null)}
+        onConfirm={() => {
+          if (!txDeleteId) return;
+          deleteTx.mutate(txDeleteId, {
+            onSuccess: () => {
+              toast.success(f.t("wal.entryDeleted"));
+              setTxDeleteId(null);
+            },
+            onError: (err) => toast.error(err.message),
+          });
+        }}
+        title={f.t("wal.txLinkedDeleteConfirm")}
       />
 
       {/* ── confirm delete wallet ── */}

@@ -2581,7 +2581,7 @@ function walletDTO(w: WalletRow, entries: WalletEntryRow[]): WalletDTO {
   };
 }
 
-function walletEntryDTO(e: WalletEntryRow): WalletEntryDTO {
+function walletEntryDTO(e: WalletEntryRow, txId: string | null = null): WalletEntryDTO {
   return {
     id: e.id,
     walletId: e.walletId,
@@ -2590,6 +2590,7 @@ function walletEntryDTO(e: WalletEntryRow): WalletEntryDTO {
     note: e.note,
     date: e.date,
     createdAt: e.createdAt,
+    txId,
   };
 }
 
@@ -2770,9 +2771,14 @@ export async function getWalletEntries(walletId: string): Promise<WalletEntryDTO
   const existing = await d.wallets.get(walletId);
   if (!existing) throw new ApiError("کیف پول یافت نشد", 404);
   const rows = await d.walletEntries.where("walletId").equals(walletId).toArray();
+  // map paired main transactions (transaction-form rows with a linked account)
+  // so the UI can route edit/delete of those rows through the transaction itself
+  const paired = new Map<string, string>(); // walletEntryId → txId
+  const txs = await d.transactions.toArray();
+  for (const t of txs) if (t.walletEntryId) paired.set(t.walletEntryId, t.id);
   return rows
     .sort((a, b) => ms(b.date) - ms(a.date) || ms(b.createdAt) - ms(a.createdAt))
-    .map(walletEntryDTO);
+    .map((e) => walletEntryDTO(e, paired.get(e.id) ?? null));
 }
 
 export async function saveWalletEntry(
@@ -2816,6 +2822,12 @@ export async function saveWalletEntry(
   if (!existing) throw new ApiError("تراکنش یافت نشد", 404);
 
   const data: Partial<WalletEntryRow> = {};
+  if (body.type !== undefined) {
+    const t = toStr(body.type);
+    if (!t || !WALLET_ENTRY_TYPES.includes(t))
+      throw new ApiError("نوع تراکنش نامعتبر است", 400);
+    data.type = t;
+  }
   if (body.amount !== undefined) {
     const amount = toNum(body.amount);
     if (amount === undefined || amount <= 0)
