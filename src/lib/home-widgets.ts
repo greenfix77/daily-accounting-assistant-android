@@ -17,7 +17,8 @@ export type HomeWidgetId =
   | "upcoming"
   | "summary"
   | "dayCounter"
-  | "prices";
+  | "prices"
+  | "wallets";
 
 /** Sub-toggles inside the summary unit (only usable in the off-list). */
 export type HomeSubWidgetId = "debts" | "goals";
@@ -29,6 +30,7 @@ const DEFAULT_ORDER: HomeWidgetId[] = [
   "summary",
   "dayCounter",
   "prices",
+  "wallets",
 ];
 
 const ORDER_IDS = new Set<string>(DEFAULT_ORDER);

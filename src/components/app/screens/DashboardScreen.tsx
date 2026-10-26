@@ -11,6 +11,7 @@ import {
   Repeat,
   HandCoins,
   CalendarClock,
+  Wallet,
 } from "lucide-react";
 import {
   DndContext,
@@ -35,7 +36,7 @@ import {
   IconBubble,
   ProgressBar,
 } from "@/components/app/ui";
-import { useDashboard, useSettings, useReminders, useDayCounters, useUpdateSettings } from "@/lib/hooks";
+import { useDashboard, useSettings, useReminders, useDayCounters, useUpdateSettings, useWalletsOverview } from "@/lib/hooks";
 import { CounterDisplay } from "@/components/app/screens/DayCounterWidgets";
 import {
   parseHomeWidgets,
@@ -132,7 +133,17 @@ class MousePointerSensor extends PointerSensor {
 }
 
 // ── Sortable wrapper: long-press (250ms) then drag to reorder ──
-function SortableCard({ id, children }: { id: string; children: React.ReactNode }) {
+// touchAction پیش‌فرض pan-y است (درگ عمودی بدون ربودن اسکرول صفحه)؛
+// ویجت‌های با اسکرول افقی داخلی (مثل کیف پول‌ها) pan-x pan-y می‌گیرند.
+function SortableCard({
+  id,
+  touchAction = "pan-y",
+  children,
+}: {
+  id: string;
+  touchAction?: string;
+  children: React.ReactNode;
+}) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id,
   });
@@ -144,7 +155,7 @@ function SortableCard({ id, children }: { id: string; children: React.ReactNode 
       style={{
         transform: CSS.Transform.toString(transform),
         transition,
-        touchAction: "pan-y",
+        touchAction,
         WebkitTouchCallout: "none",
       } as React.CSSProperties}
       className={cn(
@@ -164,6 +175,7 @@ export default function DashboardScreen({ params }: { params?: Record<string, un
   const { data: d, isLoading } = useDashboard();
   const { data: pendingReminders } = useReminders(true);
   const { data: dayCounters } = useDayCounters();
+  const { data: walOv } = useWalletsOverview();
   const updateSettings = useUpdateSettings();
 
   const budget = d?.budget ?? null;
@@ -343,7 +355,7 @@ export default function DashboardScreen({ params }: { params?: Record<string, un
             >
               <SortableContext items={visibleOrder} strategy={verticalListSortingStrategy}>
                 {visibleOrder.map((wid) => (
-                  <SortableCard key={wid} id={wid}>
+                  <SortableCard key={wid} id={wid} touchAction={wid === "wallets" ? "pan-x pan-y" : "pan-y"}>
                     {wid === "budget" && (
                       <button
                         onClick={() => push("budget")}
@@ -502,6 +514,74 @@ export default function DashboardScreen({ params }: { params?: Record<string, un
                         <p className="font-bold text-[14px] text-foreground mb-1">{f.t("dash.prices")}</p>
                         {/* reserved empty area — live asset prices (gold, USD, …) will land here */}
                         <div className="h-[190px]" aria-hidden="true" />
+                      </div>
+                    )}
+
+                    {wid === "wallets" && (
+                      <div className="bg-card rounded-3xl p-4 card-soft" aria-label={f.t("set.wgWallets")}>
+                        <div className="flex items-center justify-between mb-2.5">
+                          <p className="font-bold text-[14px] text-foreground">{f.t("set.wgWallets")}</p>
+                          <button
+                            onClick={() => setTab("planning")}
+                            className="text-primary text-[12px] font-bold"
+                          >
+                            {f.t("dash.viewAll")}
+                          </button>
+                        </div>
+                        {(walOv?.wallets ?? []).length === 0 ? (
+                          <p className="text-[12px] text-muted-foreground text-center py-6">
+                            {f.t("wal.walletsWidgetEmpty")}
+                          </p>
+                        ) : (
+                          <div className="flex gap-3 overflow-x-auto app-screen-scroll snap-x snap-mandatory pb-1 -mx-1 px-1">
+                            {(walOv?.wallets ?? []).map((w) => {
+                              const remainPct =
+                                w.totalIn > 0
+                                  ? Math.max(0, Math.min(100, Math.round((w.balance / w.totalIn) * 100)))
+                                  : 0;
+                              return (
+                                <button
+                                  key={w.id}
+                                  onClick={() => push("wallet-details", { id: w.id })}
+                                  aria-label={w.title}
+                                  className="w-[172px] shrink-0 snap-start rounded-2xl bg-secondary/50 p-3.5 flex flex-col gap-2 text-start hover:bg-secondary/70 active:scale-[0.98] transition-all"
+                                >
+                                  <span className="flex items-center gap-1.5 min-w-0">
+                                    <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-[#C08052]/15 text-[#C08052] shrink-0">
+                                      <Wallet className="w-3.5 h-3.5" />
+                                    </span>
+                                    <span className="font-bold text-[13px] text-foreground truncate">
+                                      {w.title}
+                                    </span>
+                                  </span>
+                                  <span
+                                    className={cn(
+                                      "num-input text-[17px] font-extrabold leading-none",
+                                      w.balance < 0 ? "text-expense" : "text-foreground"
+                                    )}
+                                    dir="ltr"
+                                  >
+                                    {f.money(w.balance, false)}
+                                  </span>
+                                  <span className="flex items-center justify-between gap-2 text-[10.5px] text-muted-foreground">
+                                    <span>{f.t("wal.remainingOfCharge")}</span>
+                                    <span className="num-input font-bold text-foreground" dir="ltr">
+                                      {f.fa(remainPct)}%
+                                    </span>
+                                  </span>
+                                  <ProgressBar value={remainPct} className="h-1.5" />
+                                  <span className="flex items-center gap-1 text-[10.5px] text-muted-foreground">
+                                    <span className="text-income font-bold">+</span>
+                                    <span className="num-input font-bold" dir="ltr">
+                                      {f.money(w.totalIn, false)}
+                                    </span>
+                                    <span>{f.t("wal.totalIn")}</span>
+                                  </span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        )}
                       </div>
                     )}
                   </SortableCard>

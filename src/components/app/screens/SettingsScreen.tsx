@@ -12,6 +12,7 @@ import {
   HandCoins,
   Target,
   TrendingUp,
+  Wallet,
   Lock,
   Fingerprint,
   Bell,
@@ -182,6 +183,7 @@ export default function SettingsScreen({ params }: { params?: Record<string, unk
     goals: Target,
     dayCounter: CalendarClock,
     prices: TrendingUp,
+    wallets: Wallet,
   };
   const widgetTitle = (id: HomeWidgetId | "debts" | "goals") =>
     f.t(id === "debts" ? "set.wgDebts" : id === "goals" ? "set.wgGoals" : `set.wg${id[0].toUpperCase()}${id.slice(1)}`);

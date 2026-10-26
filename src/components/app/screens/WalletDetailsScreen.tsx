@@ -14,6 +14,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
+import { ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
 import {
   ConfirmDialog,
   EmptyState,
@@ -46,12 +47,14 @@ import {
   useWalletsOverview,
 } from "@/lib/hooks";
 import { useAppStore } from "@/lib/store";
-import { formatAmountInput, parseAmountInput } from "@/lib/format";
+import { formatAmountInput, parseAmountInput, formatMoneyShort } from "@/lib/format";
 import { startOfDay, toEnDigits } from "@/lib/jalali";
 import type { WalletEntryType } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 const WALLET_COLOR = "#C08052";
+const INCOME_COLOR = "#4E9B72";
+const EXPENSE_COLOR = "#F0A868";
 
 function StatBox({
   label,
@@ -219,6 +222,84 @@ export default function WalletDetailsScreen({ params }: { params?: Record<string
             <StatBox label={f.t("wal.totalIn")} value={`+${f.money(wallet.totalIn, false)}`} tone="income" />
             <StatBox label={f.t("wal.totalOut")} value={`-${f.money(wallet.totalOut, false)}`} tone="expense" />
           </div>
+        </div>
+
+        {/* ── نمودار دایره‌ای وضعیت شارژ ── */}
+        <div className="bg-card rounded-3xl p-4 card-soft">
+          <p className="font-bold text-[14px] text-foreground mb-2">{f.t("wal.chargeStatus")}</p>
+          {wallet.totalIn > 0 ? (
+            <div className="flex items-center gap-4">
+              <div className="relative w-[128px] h-[128px] shrink-0">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={[
+                        {
+                          name: f.t("wal.remainingOfCharge"),
+                          value: Math.max(0, wallet.balance),
+                          color: INCOME_COLOR,
+                        },
+                        {
+                          name: f.t("wal.spentOfCharge"),
+                          value: Math.max(0, wallet.totalOut),
+                          color: EXPENSE_COLOR,
+                        },
+                      ]}
+                      dataKey="value"
+                      nameKey="name"
+                      innerRadius="62%"
+                      outerRadius="90%"
+                      paddingAngle={3}
+                      stroke="none"
+                    >
+                      <Cell fill={INCOME_COLOR} />
+                      <Cell fill={EXPENSE_COLOR} />
+                    </Pie>
+                  </PieChart>
+                </ResponsiveContainer>
+                <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                  <span className="text-[10px] text-muted-foreground">{f.t("wal.balance")}</span>
+                  <span
+                    className={cn(
+                      "num-input text-[13px] font-extrabold",
+                      wallet.balance < 0 ? "text-expense" : "text-foreground"
+                    )}
+                  >
+                    {formatMoneyShort(wallet.balance, f.lang)}
+                  </span>
+                </div>
+              </div>
+              <div className="flex-1 min-w-0 flex flex-col gap-2">
+                {[
+                  { label: f.t("wal.remainingOfCharge"), value: wallet.balance, color: INCOME_COLOR },
+                  { label: f.t("wal.spentOfCharge"), value: wallet.totalOut, color: EXPENSE_COLOR },
+                ].map((c) => (
+                  <div key={c.label} className="flex items-center gap-2 min-w-0">
+                    <span
+                      className="w-2.5 h-2.5 rounded-full shrink-0"
+                      style={{ backgroundColor: c.color }}
+                    />
+                    <span className="flex-1 min-w-0 text-[12px] text-muted-foreground truncate">
+                      {c.label}
+                    </span>
+                    <span
+                      className={cn(
+                        "num-input text-[12.5px] font-bold shrink-0",
+                        c.color === EXPENSE_COLOR ? "text-expense" : "text-foreground"
+                      )}
+                      dir="ltr"
+                    >
+                      {f.money(c.value, false)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <p className="text-[12px] text-muted-foreground text-center py-8">
+              {f.t("wal.noChargeYet")}
+            </p>
+          )}
         </div>
 
         {/* ── quick actions ── */}
