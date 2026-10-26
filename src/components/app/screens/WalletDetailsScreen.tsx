@@ -462,15 +462,26 @@ export default function WalletDetailsScreen({ params }: { params?: Record<string
                       {f.dateShort(new Date(e.date))}
                     </span>
                   </div>
-                  <span
-                    className={cn(
-                      "num-input text-[13px] font-bold shrink-0",
-                      e.type === "IN" ? "text-income" : "text-expense"
+                  <span className="flex flex-col items-end gap-0.5 shrink-0">
+                    <span
+                      className={cn(
+                        "num-input text-[13px] font-bold",
+                        e.type === "IN" ? "text-income" : "text-expense"
+                      )}
+                      dir="ltr"
+                    >
+                      {e.type === "IN" ? "+" : "-"}
+                      {f.money(e.amount, false)}
+                    </span>
+                    {e.balanceAfter !== undefined && (
+                      <span className="text-[10px] text-muted-foreground whitespace-nowrap">
+                        {f.t("common.balanceAfter")}:
+                        <span className="num-input" dir="ltr">
+                          {" "}
+                          {f.money(e.balanceAfter, false)}
+                        </span>
+                      </span>
                     )}
-                    dir="ltr"
-                  >
-                    {e.type === "IN" ? "+" : "-"}
-                    {f.money(e.amount, false)}
                   </span>
                   <button
                     type="button"

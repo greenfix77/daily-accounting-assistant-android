@@ -522,7 +522,7 @@ export default function DashboardScreen({ params }: { params?: Record<string, un
                         <div className="flex items-center justify-between mb-2.5">
                           <p className="font-bold text-[14px] text-foreground">{f.t("set.wgWallets")}</p>
                           <button
-                            onClick={() => setTab("planning")}
+                            onClick={() => push("wallet")}
                             className="text-primary text-[12px] font-bold"
                           >
                             {f.t("dash.viewAll")}

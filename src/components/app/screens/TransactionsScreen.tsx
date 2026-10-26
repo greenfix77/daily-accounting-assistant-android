@@ -83,13 +83,24 @@ function TxRow({ tx, onPress }: { tx: TransactionDTO; onPress: () => void }) {
           {tx.toAccountName ? ` ← ${tx.toAccountName}` : ""} • {f.dateShort(tx.date)}
         </p>
       </div>
-      {isTransfer ? (
-        <span dir="ltr" className="num-input text-[14px] font-bold text-[#A78BCA] shrink-0">
-          {f.money(tx.amount, false)}
-        </span>
-      ) : (
-        <AmountText value={tx.amount} type={tx.type} className="text-[14px] shrink-0" />
-      )}
+      <span className="flex flex-col items-end gap-0.5 shrink-0">
+        {isTransfer ? (
+          <span dir="ltr" className="num-input text-[14px] font-bold text-[#A78BCA]">
+            {f.money(tx.amount, false)}
+          </span>
+        ) : (
+          <AmountText value={tx.amount} type={tx.type} className="text-[14px]" />
+        )}
+        {tx.balanceAfter != null && (
+          <span className="text-[10px] text-muted-foreground whitespace-nowrap">
+            {f.t("common.balanceAfter")}:
+            <span className="num-input" dir="ltr">
+              {" "}
+              {f.money(tx.balanceAfter, false)}
+            </span>
+          </span>
+        )}
+      </span>
     </button>
   );
 }

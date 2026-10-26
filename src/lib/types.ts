@@ -80,6 +80,8 @@ export interface TransactionDTO {
   walletEntryId: string | null;
   date: string;
   createdAt: string;
+  /** running balance of the row's primary account right after this transaction — set only for date-based sorts in list results (null/undefined = don't show) */
+  balanceAfter?: number | null;
 }
 
 export interface BudgetItemDTO {
@@ -256,6 +258,8 @@ export interface WalletEntryDTO {
   createdAt: string;
   /** paired main transaction id when this entry was created via the transaction form with a linked account (null = wallet-only row) */
   txId: string | null;
+  /** wallet balance right after this entry (running balance, newest first) — set in list results */
+  balanceAfter?: number;
 }
 
 export interface WalletLinkedAccountDTO {

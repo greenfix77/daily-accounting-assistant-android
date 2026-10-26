@@ -164,6 +164,13 @@ function pad(n: number): string {
 }
 
 const ms = (iso: string): number => new Date(iso).getTime();
+// calendar-day granularity — entry/tx dates mix startOfDay (00:00) and full
+// timestamps (e.g. wallet initial balance), so same-day rows must order by
+// creation sequence, not raw timestamp
+const dayMs = (iso: string): number => {
+  const dt = new Date(iso);
+  return new Date(dt.getFullYear(), dt.getMonth(), dt.getDate()).getTime();
+};
 
 // ── DTO mappers (mirror app/api/_lib/core.ts) ────────────────
 
@@ -581,8 +588,9 @@ export interface TxFilters {
 
 export async function getTransactions(filters: TxFilters = {}): Promise<TransactionDTO[]> {
   const d = db();
-  const [txs, { accMap, catMap, walletMap }] = await Promise.all([
+  const [txs, accounts, { accMap, catMap, walletMap }] = await Promise.all([
     d.transactions.toArray(),
+    d.accounts.toArray(),
     loadMaps(d),
   ]);
 
@@ -633,17 +641,40 @@ export async function getTransactions(filters: TxFilters = {}): Promise<Transact
   const sorted = [...rows].sort((a, b) => {
     switch (sort) {
       case "date_asc":
-        return ms(a.date) - ms(b.date) || ms(a.createdAt) - ms(b.createdAt);
+        return dayMs(a.date) - dayMs(b.date) || ms(a.createdAt) - ms(b.createdAt);
       case "amount_desc":
-        return b.amount - a.amount || ms(b.date) - ms(a.date);
+        return b.amount - a.amount || dayMs(b.date) - dayMs(a.date);
       case "amount_asc":
-        return a.amount - b.amount || ms(b.date) - ms(a.date);
+        return a.amount - b.amount || dayMs(b.date) - dayMs(a.date);
       default:
-        return ms(b.date) - ms(a.date) || ms(b.createdAt) - ms(a.createdAt);
+        return dayMs(b.date) - dayMs(a.date) || ms(b.createdAt) - ms(a.createdAt);
     }
   });
 
-  return sorted.slice(0, limit).map((row) => txDTO(row, accMap, catMap, walletMap));
+  // running balance per account over the FULL ledger (chronological order,
+  // mirrors computeBalance) — a filtered view still shows the real account
+  // balance after each transaction. Only meaningful for date-based sorts.
+  const dateSorted = sort === "date_desc" || sort === "date_asc";
+  const attachBalance = (dto: TransactionDTO, row: TransactionRow): TransactionDTO => {
+    dto.balanceAfter = dateSorted ? (after.get(row.id) ?? null) : null;
+    return dto;
+  };
+  const after = new Map<string, number>(); // txId → source account balance after
+  if (dateSorted) {
+    const chron = [...txs].sort(
+      (a, b) => dayMs(a.date) - dayMs(b.date) || ms(a.createdAt) - ms(b.createdAt)
+    );
+    const running = new Map<string, number>();
+    for (const acc of accounts) running.set(acc.id, acc.initialBalance);
+    for (const t of chron) {
+      let r = running.get(t.accountId) ?? 0;
+      if (t.type === "INCOME") r += t.amount;
+      else r -= t.amount; // EXPENSE or TRANSFER out of the source account
+      running.set(t.accountId, r);
+      after.set(t.id, r);
+    }
+  }
+  return sorted.slice(0, limit).map((row) => attachBalance(txDTO(row, accMap, catMap, walletMap), row));
 }
 
 export async function getTransaction(id: string): Promise<TransactionDTO> {
@@ -2776,9 +2807,21 @@ export async function getWalletEntries(walletId: string): Promise<WalletEntryDTO
   const paired = new Map<string, string>(); // walletEntryId → txId
   const txs = await d.transactions.toArray();
   for (const t of txs) if (t.walletEntryId) paired.set(t.walletEntryId, t.id);
-  return rows
-    .sort((a, b) => ms(b.date) - ms(a.date) || ms(b.createdAt) - ms(a.createdAt))
-    .map((e) => walletEntryDTO(e, paired.get(e.id) ?? null));
+  const sorted = rows
+    .sort(
+      (a, b) =>
+        dayMs(b.date) - dayMs(a.date) || ms(b.createdAt) - ms(a.createdAt)
+    );
+  // running wallet balance (newest → oldest): balanceAfter = wallet balance right
+  // after that entry; wallet balance = Σ IN − Σ OUT over all entries, so stepping
+  // backwards from the newest entry unwinds each amount
+  let running = sorted.reduce((s, e) => s + (e.type === "IN" ? e.amount : -e.amount), 0);
+  return sorted.map((e) => {
+    const dto = walletEntryDTO(e, paired.get(e.id) ?? null);
+    dto.balanceAfter = running;
+    running += e.type === "OUT" ? e.amount : -e.amount; // step to the older entry
+    return dto;
+  });
 }
 
 export async function saveWalletEntry(
