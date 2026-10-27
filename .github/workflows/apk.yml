@@ -3,9 +3,33 @@ name: Build Android APK
 # Build a fully-offline installable APK from the static export.
 # Run it from the Actions tab → "Build Android APK" → Run workflow,
 # or automatically when a v* tag is pushed (creates a GitHub Release).
+#
+# Rollback builds (downgrade made installable):
+#   Android refuses to sideload a LOWER versionCode over an installed higher
+#   one (INSTALL_FAILED_VERSION_DOWNGRADE → "App not installed as package
+#   appears to be invalid"). To roll back via the plain UI, dispatch this
+#   workflow with:
+#     build_ref:            an older tag, e.g. v1.0.23-android
+#     version_code_override: an integer HIGHER than the installed app's
+#                            versionCode (e.g. 26 when 25 is installed)
+#   The produced APK is named `HesabYar-ReyRa-<version>-rc<code>.apk` and
+#   installs over anything with a lower versionCode, like a normal update.
+#   The checkout uses the selected tag's code, while the workflow itself must
+#   be dispatched from a ref that contains this file (e.g. main).
 
 on:
   workflow_dispatch:
+    inputs:
+      build_ref:
+        description: "Optional git ref (tag/branch) to build. Empty = dispatch ref."
+        required: false
+        default: ""
+        type: string
+      version_code_override:
+        description: "Optional versionCode stamp (integer > installed) for rollback builds."
+        required: false
+        default: ""
+        type: string
   push:
     tags:
       - "v*"
@@ -18,6 +42,23 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.build_ref || github.ref }}
+
+      # Rollback builds: stamp a higher versionCode into the OLD code so the
+      # plain package installer accepts it as a normal update (downgrade-safe).
+      - name: Apply versionCode override (rollback builds)
+        if: inputs.version_code_override != ''
+        env:
+          VCO: ${{ inputs.version_code_override }}
+        run: |
+          if ! [[ "$VCO" =~ ^[0-9]+$ ]]; then
+            echo "::error::version_code_override must be a positive integer, got: '$VCO'"
+            exit 1
+          fi
+          sed -i "s/versionCode .*/versionCode $VCO/" android/app/build.gradle
+          echo "versionCode stamped: $VCO"
+          grep -n "versionCode" android/app/build.gradle | head -1
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
@@ -52,12 +93,16 @@ jobs:
 
       - name: Rename APK
         id: apk
+        env:
+          VCO: ${{ inputs.version_code_override }}
         run: |
           VERSION=$(grep -o 'versionName "[^"]*"' android/app/build.gradle | head -1 | cut -d'"' -f2)
+          SUFFIX=""
+          if [ -n "$VCO" ]; then SUFFIX="-rc$VCO"; fi
           mkdir -p apk-out
-          cp android/app/build/outputs/apk/debug/app-debug.apk "apk-out/HesabYar-ReyRa-$VERSION.apk"
-          echo "apk=apk-out/HesabYar-ReyRa-$VERSION.apk" >> "$GITHUB_OUTPUT"
-          echo "APK file: HesabYar-ReyRa-$VERSION.apk"
+          cp android/app/build/outputs/apk/debug/app-debug.apk "apk-out/HesabYar-ReyRa-$VERSION$SUFFIX.apk"
+          echo "apk=apk-out/HesabYar-ReyRa-$VERSION$SUFFIX.apk" >> "$GITHUB_OUTPUT"
+          echo "APK file: HesabYar-ReyRa-$VERSION$SUFFIX.apk"
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
@@ -70,4 +115,13 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
+          files: ${{ steps.apk.outputs.apk }}
+
+      # Rollback builds dispatched from main with build_ref=<old tag>: attach
+      # the -rc APK to the release of that tag so it is downloadable directly.
+      - name: Attach rollback APK to GitHub Release
+        if: inputs.build_ref != '' && startsWith(inputs.build_ref, 'v')
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ inputs.build_ref }}
           files: ${{ steps.apk.outputs.apk }}

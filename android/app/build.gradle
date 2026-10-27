@@ -7,6 +7,9 @@ android {
         applicationId "com.reyra.hesabyar"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
+        // versionCode scheme (from 1.0.25): major*10000 + minor*100 + patch
+        // (e.g. 1.0.25 → 10025) — keeps headroom above rollback builds, which
+        // are stamped with small sequential codes (see README «دانگرید»)
         versionCode 25
         versionName "1.0.24"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
