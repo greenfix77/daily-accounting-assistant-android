@@ -461,6 +461,29 @@ function accountDTO(a: AccountRow, txs: TransactionRow[]): AccountDTO {
   };
 }
 
+/** per-account running balances over the FULL ledger (chronological, calendar-day
+ *  granularity — mirrors computeBalance) → txId → balance of the row's primary
+ *  account right after that transaction */
+function buildBalanceAfterMap(
+  txs: TransactionRow[],
+  accounts: AccountRow[],
+): Map<string, number> {
+  const chron = [...txs].sort(
+    (a, b) => dayMs(a.date) - dayMs(b.date) || ms(a.createdAt) - ms(b.createdAt)
+  );
+  const running = new Map<string, number>();
+  for (const acc of accounts) running.set(acc.id, acc.initialBalance);
+  const after = new Map<string, number>();
+  for (const t of chron) {
+    let r = running.get(t.accountId) ?? 0;
+    if (t.type === "INCOME") r += t.amount;
+    else r -= t.amount; // EXPENSE or TRANSFER out of the source account
+    running.set(t.accountId, r);
+    after.set(t.id, r);
+  }
+  return after;
+}
+
 // ═════════════════════════════════════════════════════════════
 // Settings / Profile  (GET + PATCH /api/settings)
 // ═════════════════════════════════════════════════════════════
@@ -651,30 +674,18 @@ export async function getTransactions(filters: TxFilters = {}): Promise<Transact
     }
   });
 
-  // running balance per account over the FULL ledger (chronological order,
-  // mirrors computeBalance) — a filtered view still shows the real account
-  // balance after each transaction. Only meaningful for date-based sorts.
+  // running balance per account over the FULL ledger — a filtered view still
+  // shows the real account balance after each transaction. Only meaningful for
+  // date-based sorts.
   const dateSorted = sort === "date_desc" || sort === "date_asc";
-  const attachBalance = (dto: TransactionDTO, row: TransactionRow): TransactionDTO => {
-    dto.balanceAfter = dateSorted ? (after.get(row.id) ?? null) : null;
-    return dto;
-  };
-  const after = new Map<string, number>(); // txId → source account balance after
-  if (dateSorted) {
-    const chron = [...txs].sort(
-      (a, b) => dayMs(a.date) - dayMs(b.date) || ms(a.createdAt) - ms(b.createdAt)
-    );
-    const running = new Map<string, number>();
-    for (const acc of accounts) running.set(acc.id, acc.initialBalance);
-    for (const t of chron) {
-      let r = running.get(t.accountId) ?? 0;
-      if (t.type === "INCOME") r += t.amount;
-      else r -= t.amount; // EXPENSE or TRANSFER out of the source account
-      running.set(t.accountId, r);
-      after.set(t.id, r);
-    }
-  }
-  return sorted.slice(0, limit).map((row) => attachBalance(txDTO(row, accMap, catMap, walletMap), row));
+  const after = dateSorted ? buildBalanceAfterMap(txs, accounts) : new Map<string, number>();
+  return sorted
+    .slice(0, limit)
+    .map((row) => {
+      const dto = txDTO(row, accMap, catMap, walletMap);
+      dto.balanceAfter = dateSorted ? (after.get(row.id) ?? null) : null;
+      return dto;
+    });
 }
 
 export async function getTransaction(id: string): Promise<TransactionDTO> {
@@ -1947,7 +1958,7 @@ export async function getDashboard(): Promise<DashboardDTO> {
     return ms(a.createdAt) - ms(b.createdAt);
   });
   const txs = [...txRows].sort(
-    (a, b) => ms(b.date) - ms(a.date) || ms(b.createdAt) - ms(a.createdAt),
+    (a, b) => dayMs(b.date) - dayMs(a.date) || ms(b.createdAt) - ms(a.createdAt),
   );
   const budgets = budgetRows.filter((b) => b.month === monthKey);
 
@@ -2010,8 +2021,13 @@ export async function getDashboard(): Promise<DashboardDTO> {
     });
   }
 
-  // ---- recent transactions ----
-  const recent = txs.slice(0, 6).map((row) => txDTO(row, accMap, catMap, walletMap));
+  // ---- recent transactions (with running account balance) ----
+  const after = buildBalanceAfterMap(txRows, accountRows);
+  const recent = txs.slice(0, 6).map((row) => {
+    const dto = txDTO(row, accMap, catMap, walletMap);
+    dto.balanceAfter = after.get(row.id) ?? null;
+    return dto;
+  });
 
   // ---- upcoming (next 5 within 30 days) ----
   const upcoming: UpcomingDTO[] = [];

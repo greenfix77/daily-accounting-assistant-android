@@ -72,7 +72,18 @@ function TxRow({ tx }: { tx: TransactionDTO }) {
           {tx.accountName} • {f.dateShort(tx.date)}
         </p>
       </div>
-      <AmountText value={tx.amount} type={tx.type} className="text-[13px] shrink-0" withUnit={false} />
+      <span className="flex flex-col items-end gap-0.5 shrink-0">
+        <AmountText value={tx.amount} type={tx.type} className="text-[13px]" withUnit={false} />
+        {tx.balanceAfter != null && (
+          <span className="text-[10px] text-muted-foreground whitespace-nowrap">
+            {f.t("common.balanceAfter")}:
+            <span className="num-input" dir="ltr">
+              {" "}
+              {f.money(tx.balanceAfter, false)}
+            </span>
+          </span>
+        )}
+      </span>
     </button>
   );
 }
