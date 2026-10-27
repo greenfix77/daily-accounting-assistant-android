@@ -45,7 +45,7 @@ import {
 } from "@/lib/home-widgets";
 import { useAppStore } from "@/lib/store";
 import { WEEKDAY_NAMES_FA, WEEKDAY_NAMES_EN } from "@/lib/jalali";
-import type { TransactionDTO, UpcomingDTO } from "@/lib/types";
+import type { TransactionDTO, UpcomingDTO, ReminderDTO } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 const INCOME_COLOR = "#4E9B72";
@@ -124,6 +124,33 @@ function UpcomingRow({ item }: { item: UpcomingDTO }) {
           {f.money(item.amount, false)}
         </span>
       )}
+    </button>
+  );
+}
+
+// ── Reminder row (ویجت یادآوری‌ها) ─────────────────────────
+function ReminderRow({ r }: { r: ReminderDTO }) {
+  const f = useAppFormat();
+  const push = useAppStore((s) => s.push);
+  const urgent = r.daysLeft < 3;
+  return (
+    <button
+      onClick={() => push("reminders")}
+      className="w-full flex items-center gap-3 py-2.5 text-start hover:bg-secondary/40 rounded-xl px-1 transition-colors"
+    >
+      <span
+        className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
+        style={{ backgroundColor: "#E5757A1f", color: "#E5757A" }}
+      >
+        <Bell className="w-4 h-4" />
+      </span>
+      <div className="flex-1 min-w-0">
+        <p className="text-[13px] font-semibold text-foreground truncate">{r.title}</p>
+        <p className={cn("text-[11px]", urgent ? "text-expense font-semibold" : "text-muted-foreground")}>
+          {f.dateShort(r.date)}
+          {r.daysLeft >= 0 ? ` • ${f.daysLabel(r.date)}` : ""}
+        </p>
+      </div>
     </button>
   );
 }
@@ -431,6 +458,31 @@ export default function DashboardScreen({ params }: { params?: Record<string, un
                           <div className="flex flex-col divide-y divide-border/50">
                             {d.upcoming.slice(0, 3).map((u) => (
                               <UpcomingRow key={`${u.kind}-${u.id}`} item={u} />
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {wid === "reminders" && (
+                      <div className="bg-card rounded-3xl p-4 card-soft" aria-label={f.t("rem.title")}>
+                        <div className="flex items-center justify-between mb-1">
+                          <p className="font-bold text-[14px] text-foreground">{f.t("rem.title")}</p>
+                          <button
+                            onClick={() => push("reminders")}
+                            className="text-primary text-[12px] font-bold"
+                          >
+                            {f.t("dash.viewAll")}
+                          </button>
+                        </div>
+                        {(pendingReminders ?? []).length === 0 ? (
+                          <p className="text-[12px] text-muted-foreground text-center py-6">
+                            {f.t("rem.empty")}
+                          </p>
+                        ) : (
+                          <div className="flex flex-col divide-y divide-border/50">
+                            {(pendingReminders ?? []).slice(0, 4).map((r) => (
+                              <ReminderRow key={r.id} r={r} />
                             ))}
                           </div>
                         )}

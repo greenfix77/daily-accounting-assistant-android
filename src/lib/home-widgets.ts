@@ -15,6 +15,7 @@ export type HomeWidgetId =
   | "budget"
   | "recentTx"
   | "upcoming"
+  | "reminders"
   | "summary"
   | "dayCounter"
   | "prices"
@@ -27,6 +28,7 @@ const DEFAULT_ORDER: HomeWidgetId[] = [
   "budget",
   "recentTx",
   "upcoming",
+  "reminders",
   "summary",
   "dayCounter",
   "prices",

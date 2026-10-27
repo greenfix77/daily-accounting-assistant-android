@@ -178,6 +178,7 @@ export default function SettingsScreen({ params }: { params?: Record<string, unk
     budget: PieChart,
     recentTx: Receipt,
     upcoming: CalendarDays,
+    reminders: Bell,
     summary: HandCoins,
     debts: HandCoins,
     goals: Target,
