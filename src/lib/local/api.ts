@@ -480,6 +480,13 @@ function buildBalanceAfterMap(
     else r -= t.amount; // EXPENSE or TRANSFER out of the source account
     running.set(t.accountId, r);
     after.set(t.id, r);
+    // a TRANSFER row is stored once on the source account with toAccountId on
+    // the destination — credit the destination's running balance too (mirrors
+    // computeBalance); otherwise every destination-account balance after the
+    // transfer drifts down by the transfer amount
+    if (t.type === "TRANSFER" && t.toAccountId) {
+      running.set(t.toAccountId, (running.get(t.toAccountId) ?? 0) + t.amount);
+    }
   }
   return after;
 }
