@@ -10,6 +10,7 @@ import {
   PieChart,
   Receipt,
   HandCoins,
+  Repeat,
   Target,
   TrendingUp,
   Wallet,
@@ -177,7 +178,7 @@ export default function SettingsScreen({ params }: { params?: Record<string, unk
   const widgetIcon: Record<HomeWidgetId | "debts" | "goals", LucideIcon> = {
     budget: PieChart,
     recentTx: Receipt,
-    upcoming: CalendarDays,
+    upcoming: Repeat,
     reminders: Bell,
     summary: HandCoins,
     debts: HandCoins,

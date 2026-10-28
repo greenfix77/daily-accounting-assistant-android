@@ -9,7 +9,6 @@ import {
   TrendingUp,
   TrendingDown,
   Repeat,
-  HandCoins,
   CalendarClock,
   Wallet,
 } from "lucide-react";
@@ -36,7 +35,7 @@ import {
   IconBubble,
   ProgressBar,
 } from "@/components/app/ui";
-import { useDashboard, useSettings, useReminders, useDayCounters, useUpdateSettings, useWalletsOverview } from "@/lib/hooks";
+import { useDashboard, useSettings, useReminders, useRecurring, useDayCounters, useUpdateSettings, useWalletsOverview } from "@/lib/hooks";
 import { CounterDisplay } from "@/components/app/screens/DayCounterWidgets";
 import {
   parseHomeWidgets,
@@ -45,7 +44,7 @@ import {
 } from "@/lib/home-widgets";
 import { useAppStore } from "@/lib/store";
 import { WEEKDAY_NAMES_FA, WEEKDAY_NAMES_EN } from "@/lib/jalali";
-import type { TransactionDTO, UpcomingDTO, ReminderDTO } from "@/lib/types";
+import type { TransactionDTO, ReminderDTO, RecurringDTO } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 const INCOME_COLOR = "#4E9B72";
@@ -88,42 +87,37 @@ function TxRow({ tx }: { tx: TransactionDTO }) {
   );
 }
 
-// ── Upcoming row ─────────────────────────────────────────────
-function UpcomingRow({ item }: { item: UpcomingDTO }) {
+// ── Installment row (ویجت اقساط) ─────────────────────────
+function InstallmentRow({ r }: { r: RecurringDTO }) {
   const f = useAppFormat();
   const push = useAppStore((s) => s.push);
-  const Icon = item.kind === "RECURRING" ? Repeat : item.kind === "DEBT" ? HandCoins : Bell;
-  const color =
-    item.kind === "RECURRING" ? "#5E9EA0" : item.kind === "DEBT" ? "#E5B84E" : "#D97BA6";
-  const urgent = item.daysLeft < 3;
+  const due = r.nextDue!;
+  const dl = Math.round(
+    (new Date(due).setHours(0, 0, 0, 0) - new Date().setHours(0, 0, 0, 0)) / 86400000
+  );
+  const urgent = dl < 3;
   return (
     <button
-      onClick={() =>
-        item.kind === "RECURRING"
-          ? push("recurring")
-          : item.kind === "DEBT"
-            ? push("debts")
-            : push("reminders")
-      }
+      onClick={() => push("recurring")}
       className="w-full flex items-center gap-3 py-2.5 text-start hover:bg-secondary/40 rounded-xl px-1 transition-colors"
     >
       <span
         className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
-        style={{ backgroundColor: `${color}1f`, color }}
+        style={{ backgroundColor: "#5E9EA01f", color: "#5E9EA0" }}
       >
-        <Icon className="w-4 h-4" />
+        <Repeat className="w-4 h-4" />
       </span>
       <div className="flex-1 min-w-0">
-        <p className="text-[13px] font-semibold text-foreground truncate">{item.title}</p>
+        <p className="text-[13px] font-semibold text-foreground truncate">{r.title}</p>
         <p className={cn("text-[11px]", urgent ? "text-expense font-semibold" : "text-muted-foreground")}>
-          {f.daysLabel(item.date)}
+          {f.dateShort(due)}
+          {dl >= 0 ? ` • ${f.daysLabel(due)}` : ""}
+          {r.totalCount ? ` • ${f.t("rec.installmentOf", { x: f.fa(r.paidCount + 1), y: f.fa(r.totalCount) })}` : ""}
         </p>
       </div>
-      {item.amount != null && (
-        <span className="num-input text-[12px] font-bold text-foreground shrink-0">
-          {f.money(item.amount, false)}
-        </span>
-      )}
+      <span className="num-input text-[12px] font-bold text-foreground shrink-0">
+        {f.money(r.amount, false)}
+      </span>
     </button>
   );
 }
@@ -212,6 +206,15 @@ export default function DashboardScreen({ params }: { params?: Record<string, un
   const { data: settings } = useSettings();
   const { data: d, isLoading } = useDashboard();
   const { data: pendingReminders } = useReminders(true);
+  const { data: recurringAll } = useRecurring();
+  // ویجت «اقساط» — قسط‌های فعال با سررسید بعدی، نزدیک‌ترین اول
+  const upcomingInstallments = React.useMemo(
+    () =>
+      (recurringAll ?? [])
+        .filter((r) => r.isActive && r.nextDue)
+        .sort((a, b) => Date.parse(a.nextDue!) - Date.parse(b.nextDue!)),
+    [recurringAll]
+  );
   const { data: dayCounters } = useDayCounters();
   const { data: walOv } = useWalletsOverview();
   const updateSettings = useUpdateSettings();
@@ -448,16 +451,24 @@ export default function DashboardScreen({ params }: { params?: Record<string, un
                     )}
 
                     {wid === "upcoming" && (
-                      <div className="bg-card rounded-3xl p-4 card-soft">
-                        <p className="font-bold text-[14px] text-foreground mb-1">{f.t("dash.upcoming")}</p>
-                        {d.upcoming.length === 0 ? (
+                      <div className="bg-card rounded-3xl p-4 card-soft" aria-label={f.t("dash.upcoming")}>
+                        <div className="flex items-center justify-between mb-1">
+                          <p className="font-bold text-[14px] text-foreground">{f.t("dash.upcoming")}</p>
+                          <button
+                            onClick={() => push("recurring")}
+                            className="text-primary text-[12px] font-bold"
+                          >
+                            {f.t("dash.viewAll")}
+                          </button>
+                        </div>
+                        {upcomingInstallments.length === 0 ? (
                           <p className="text-[12px] text-muted-foreground text-center py-6">
                             {f.t("dash.noUpcoming")}
                           </p>
                         ) : (
                           <div className="flex flex-col divide-y divide-border/50">
-                            {d.upcoming.slice(0, 3).map((u) => (
-                              <UpcomingRow key={`${u.kind}-${u.id}`} item={u} />
+                            {upcomingInstallments.slice(0, 4).map((r) => (
+                              <InstallmentRow key={r.id} r={r} />
                             ))}
                           </div>
                         )}
