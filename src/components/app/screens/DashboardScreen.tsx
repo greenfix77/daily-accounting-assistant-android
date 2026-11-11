@@ -43,7 +43,7 @@ import {
   type HomeWidgetId,
 } from "@/lib/home-widgets";
 import { useAppStore } from "@/lib/store";
-import { WEEKDAY_NAMES_FA, WEEKDAY_NAMES_EN } from "@/lib/jalali";
+import { WEEKDAY_NAMES_FA, WEEKDAY_NAMES_EN, formatTime, hasTimePart } from "@/lib/jalali";
 import type { TransactionDTO, ReminderDTO, RecurringDTO } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -69,6 +69,7 @@ function TxRow({ tx }: { tx: TransactionDTO }) {
         </p>
         <p className="text-[11px] text-muted-foreground truncate">
           {tx.accountName} • {f.dateShort(tx.date)}
+          {hasTimePart(tx.date) ? ` • ${formatTime(tx.date, f.lang)}` : ""}
         </p>
       </div>
       <span className="flex flex-col items-end gap-0.5 shrink-0">

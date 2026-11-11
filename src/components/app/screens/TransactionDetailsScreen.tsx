@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { useAppStore } from "@/lib/store";
 import { useTransaction, useDeleteTransaction } from "@/lib/hooks";
 import type { TransactionDTO, TxType } from "@/lib/types";
+import { formatTime, hasTimePart } from "@/lib/jalali";
 import { AmountText, EmptyState, IconBubble, ScreenHeader, ConfirmDialog, useAppFormat } from "@/components/app/ui";
 
 const TYPE_COLOR: Record<TxType, string> = {
@@ -113,7 +114,10 @@ export default function TransactionDetailsScreen({ params }: { params?: Record<s
                 withUnit
                 className="text-[24px]"
               />
-              <p className="text-[12px] text-muted-foreground">{f.dateLong(tx.date)}</p>
+              <p className="text-[12px] text-muted-foreground">
+                {f.dateLong(tx.date)}
+                {hasTimePart(tx.date) ? ` • ${formatTime(tx.date, f.lang)}` : ""}
+              </p>
             </div>
 
             {/* Info rows */}

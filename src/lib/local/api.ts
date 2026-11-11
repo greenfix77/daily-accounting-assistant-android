@@ -165,8 +165,10 @@ function pad(n: number): string {
 
 const ms = (iso: string): number => new Date(iso).getTime();
 // calendar-day granularity — entry/tx dates mix startOfDay (00:00) and full
-// timestamps (e.g. wallet initial balance), so same-day rows must order by
-// creation sequence, not raw timestamp
+// timestamps (e.g. wallet initial balance); transaction lists/statements now
+// order by the FULL timestamp (time-of-day matters since v1.0.26 — time is
+// recorded manually or stamped at entry), with createdAt as tie-break so
+// legacy 00:00 rows keep their creation order
 const dayMs = (iso: string): number => {
   const dt = new Date(iso);
   return new Date(dt.getFullYear(), dt.getMonth(), dt.getDate()).getTime();
@@ -469,7 +471,7 @@ function buildBalanceAfterMap(
   accounts: AccountRow[],
 ): Map<string, number> {
   const chron = [...txs].sort(
-    (a, b) => dayMs(a.date) - dayMs(b.date) || ms(a.createdAt) - ms(b.createdAt)
+    (a, b) => ms(a.date) - ms(b.date) || ms(a.createdAt) - ms(b.createdAt)
   );
   const running = new Map<string, number>();
   for (const acc of accounts) running.set(acc.id, acc.initialBalance);
@@ -687,13 +689,13 @@ export async function getTransactions(filters: TxFilters = {}): Promise<Transact
   const sorted = [...rows].sort((a, b) => {
     switch (sort) {
       case "date_asc":
-        return dayMs(a.date) - dayMs(b.date) || ms(a.createdAt) - ms(b.createdAt);
+        return ms(a.date) - ms(b.date) || ms(a.createdAt) - ms(b.createdAt);
       case "amount_desc":
-        return b.amount - a.amount || dayMs(b.date) - dayMs(a.date);
+        return b.amount - a.amount || ms(b.date) - ms(a.date);
       case "amount_asc":
-        return a.amount - b.amount || dayMs(b.date) - dayMs(a.date);
+        return a.amount - b.amount || ms(b.date) - ms(a.date);
       default:
-        return dayMs(b.date) - dayMs(a.date) || ms(b.createdAt) - ms(a.createdAt);
+        return ms(b.date) - ms(a.date) || ms(b.createdAt) - ms(a.createdAt);
     }
   });
 
@@ -1991,7 +1993,7 @@ export async function getDashboard(): Promise<DashboardDTO> {
     return ms(a.createdAt) - ms(b.createdAt);
   });
   const txs = [...txRows].sort(
-    (a, b) => dayMs(b.date) - dayMs(a.date) || ms(b.createdAt) - ms(a.createdAt),
+    (a, b) => ms(b.date) - ms(a.date) || ms(b.createdAt) - ms(a.createdAt),
   );
   const budgets = budgetRows.filter((b) => b.month === monthKey);
 

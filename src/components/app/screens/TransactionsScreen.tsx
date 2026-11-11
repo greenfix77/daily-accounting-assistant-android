@@ -16,7 +16,7 @@ import {
   SegmentedTabs,
   useAppFormat,
 } from "@/components/app/ui";
-import { endOfDay, startOfDay } from "@/lib/jalali";
+import { endOfDay, formatTime, hasTimePart, startOfDay } from "@/lib/jalali";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
@@ -81,6 +81,7 @@ function TxRow({ tx, onPress }: { tx: TransactionDTO; onPress: () => void }) {
           {tx.walletId ? `${tx.walletName ?? f.t("tx.wallet")} • ` : ""}
           {tx.accountName}
           {tx.toAccountName ? ` ← ${tx.toAccountName}` : ""} • {f.dateShort(tx.date)}
+          {hasTimePart(tx.date) ? ` • ${formatTime(tx.date, f.lang)}` : ""}
         </p>
       </div>
       <span className="flex flex-col items-end gap-0.5 shrink-0">

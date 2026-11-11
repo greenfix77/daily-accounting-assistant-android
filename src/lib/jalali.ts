@@ -208,6 +208,13 @@ export function formatTime(d: Date | string, lang: Lang = "fa"): string {
   return lang === "fa" ? toFaDigits(hm) : hm;
 }
 
+/** true when the datetime carries a non-midnight time (entered manually or
+ *  stamped at entry) — legacy rows stored at 00:00 show date only */
+export function hasTimePart(d: Date | string): boolean {
+  const x = typeof d === "string" ? new Date(d) : d;
+  return x.getHours() !== 0 || x.getMinutes() !== 0 || x.getSeconds() !== 0;
+}
+
 /** Jalali month display name: "مهر ۱۴۰۳" */
 export function jalaliMonthLabel(key: string, lang: Lang = "fa"): string {
   const [y, m] = key.split("-").map(Number);

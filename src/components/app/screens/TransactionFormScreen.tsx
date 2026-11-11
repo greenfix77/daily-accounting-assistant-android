@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Loader2, ImagePlus, X, Trash2, Wallet } from "lucide-react";
+import { Clock, Loader2, ImagePlus, X, Trash2, Wallet } from "lucide-react";
 import { toast } from "sonner";
 import { useAppStore } from "@/lib/store";
 import {
@@ -14,7 +14,7 @@ import {
 } from "@/lib/hooks";
 import type { TxType } from "@/lib/types";
 import { formatAmountInput, parseAmountInput } from "@/lib/format";
-import { toEnDigits } from "@/lib/jalali";
+import { toEnDigits, toFaDigits } from "@/lib/jalali";
 import {
   ScreenHeader,
   Field,
@@ -31,6 +31,30 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 
 type Mode = "add" | "edit";
 type TxSource = "ACCOUNT" | "WALLET";
+
+/** midnight copy of a Date */
+const startOfLocalDay = (d: Date): Date => {
+  const x = new Date(d);
+  x.setHours(0, 0, 0, 0);
+  return x;
+};
+
+/** stored ISO → "HH:MM" (Persian digits when fa) for the time input */
+const fmtHM = (iso: string, fa: boolean): string => {
+  const d = new Date(iso);
+  const s = `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+  return fa ? toFaDigits(s) : s;
+};
+
+/** time input text → {h,m} | null (needs full HH:MM, 00≤h≤23, 00≤m≤59) */
+const parseHM = (s: string): { h: number; m: number } | null => {
+  const en = toEnDigits(s).replace(/\D/g, "");
+  if (en.length !== 4) return null;
+  const h = Number(en.slice(0, 2));
+  const m = Number(en.slice(2));
+  if (h > 23 || m > 59) return null;
+  return { h, m };
+};
 
 export default function TransactionFormScreen({ params }: { params?: Record<string, unknown> }) {
   const f = useAppFormat();
@@ -50,7 +74,10 @@ export default function TransactionFormScreen({ params }: { params?: Record<stri
   const [source, setSource] = React.useState<TxSource>("ACCOUNT");
   const [walletId, setWalletId] = React.useState("");
   const [linkedAccountId, setLinkedAccountId] = React.useState(""); // "" = هیچکدام (wallet-only)
-  const [date, setDate] = React.useState<Date>(new Date());
+  // date is stored day-only (midnight); the time-of-day lives in timeStr —
+  // "" = auto (entry moment for new rows, the row's existing time when editing)
+  const [date, setDate] = React.useState<Date>(() => startOfLocalDay(new Date()));
+  const [timeStr, setTimeStr] = React.useState("");
   const [notes, setNotes] = React.useState("");
   const [receiptUrl, setReceiptUrl] = React.useState<string | null>(null);
   const [confirmOpen, setConfirmOpen] = React.useState(false);
@@ -85,11 +112,12 @@ export default function TransactionFormScreen({ params }: { params?: Record<stri
         setWalletId(tx.walletId);
         setLinkedAccountId(tx.accountId ?? "");
       }
-      setDate(new Date(tx.date));
+      setDate(startOfLocalDay(new Date(tx.date)));
+      setTimeStr(fmtHM(tx.date, f.lang === "fa"));
       setNotes(tx.notes ?? "");
       setReceiptUrl(tx.receiptUrl);
     }
-  }, [mode, tx]);
+  }, [mode, tx, f.lang]);
 
   // Preselect default account for new transactions
   React.useEffect(() => {
@@ -145,10 +173,40 @@ export default function TransactionFormScreen({ params }: { params?: Record<stri
     reader.readAsDataURL(file);
   };
 
+  const onTimeChange = (raw: string) => {
+    const en = toEnDigits(raw).replace(/\D/g, "").slice(0, 4);
+    const out = en.length <= 2 ? en : `${en.slice(0, 2)}:${en.slice(2)}`;
+    setTimeStr(f.lang === "fa" ? toFaDigits(out) : out);
+  };
+
+  /** effective stored datetime: manual time > row's existing time (edit) > entry moment */
+  const buildFinalDate = (): Date | null => {
+    const d = new Date(date);
+    if (timeStr.trim()) {
+      const hm = parseHM(timeStr);
+      if (!hm) return null; // invalid → caller shows a toast
+      d.setHours(hm.h, hm.m, 0, 0);
+      return d;
+    }
+    if (mode === "edit" && tx) {
+      const orig = new Date(tx.date);
+      d.setHours(orig.getHours(), orig.getMinutes(), orig.getSeconds(), 0);
+      return d;
+    }
+    const now = new Date();
+    d.setHours(now.getHours(), now.getMinutes(), now.getSeconds(), 0);
+    return d;
+  };
+
   const onSave = async () => {
     const parsed = parseAmountInput(amount);
     if (!parsed || parsed <= 0) {
       toast.error(f.t("tx.invalidAmount"));
+      return;
+    }
+    const finalDate = buildFinalDate();
+    if (!finalDate) {
+      toast.error(f.t("tx.invalidTime"));
       return;
     }
     if (source === "WALLET") {
@@ -168,7 +226,7 @@ export default function TransactionFormScreen({ params }: { params?: Record<stri
           description: description.trim() || null,
           notes: notes.trim() || null,
           categoryId: linkedAccountId ? categoryId || null : null,
-          date: date.toISOString(),
+          date: finalDate.toISOString(),
           receiptUrl: linkedAccountId ? receiptUrl : null,
         });
         toast.success(mode === "edit" ? f.t("toast.txUpdated") : f.t("toast.txAdded"));
@@ -201,7 +259,7 @@ export default function TransactionFormScreen({ params }: { params?: Record<stri
         accountId,
         toAccountId: type === "TRANSFER" ? toAccountId : null,
         categoryId: type === "TRANSFER" ? null : categoryId || null,
-        date: date.toISOString(),
+        date: finalDate.toISOString(),
         receiptUrl,
       });
       toast.success(mode === "edit" ? f.t("toast.txUpdated") : f.t("toast.txAdded"));
@@ -469,9 +527,38 @@ export default function TransactionFormScreen({ params }: { params?: Record<stri
           </div>
         </Field>
 
-        {/* Date */}
-        <Field label={f.t("common.date")}>
-          <JalaliDatePicker value={date} onChange={setDate} />
+        {/* Date & time */}
+        <Field label={f.t("tx.dateAndTime")}>
+          <div className="flex flex-col gap-1.5">
+            <div className="grid grid-cols-2 gap-2">
+              <JalaliDatePicker value={date} onChange={setDate} />
+              <div className="relative h-12 rounded-2xl bg-card border border-border flex items-center gap-2 px-4 focus-within:border-primary/50 transition-colors">
+                <Clock className="w-4 h-4 text-primary shrink-0" />
+                <input
+                  dir="ltr"
+                  inputMode="numeric"
+                  value={timeStr}
+                  onChange={(e) => onTimeChange(e.target.value)}
+                  placeholder={f.t("tx.timePlaceholder")}
+                  aria-label={f.t("common.time")}
+                  className="num-input flex-1 min-w-0 bg-transparent outline-none text-[14px] text-foreground text-end placeholder:text-muted-foreground/60"
+                />
+                {timeStr && (
+                  <button
+                    type="button"
+                    onClick={() => setTimeStr("")}
+                    aria-label={f.t("common.clear")}
+                    className="w-6 h-6 rounded-full bg-secondary text-muted-foreground flex items-center justify-center shrink-0 hover:text-foreground transition-colors"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+            </div>
+            <p className="text-[10.5px] text-muted-foreground px-1">
+              {mode === "edit" ? f.t("tx.timeHintEdit") : f.t("tx.timeHintAdd")}
+            </p>
+          </div>
         </Field>
 
         {/* Receipt (wallet-only entries have no receipt attachment) */}

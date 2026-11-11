@@ -15,6 +15,8 @@ import { formatAmountInput, parseAmountInput } from "@/lib/format";
 import {
   addJalaliMonths,
   endOfDay,
+  formatTime,
+  hasTimePart,
   jalaliMonthRange,
   startOfDay,
   toEnDigits,
@@ -345,6 +347,7 @@ function StatementRow({
         <p className="text-[10.5px] text-muted-foreground truncate mt-0.5">
           {tx.categoryName ? `${tx.categoryName} • ` : ""}
           {f.dateShort(tx.date)}
+          {hasTimePart(tx.date) ? ` • ${formatTime(tx.date, f.lang)}` : ""}
         </p>
       </div>
       <span className="flex flex-col items-end gap-0.5 shrink-0">
