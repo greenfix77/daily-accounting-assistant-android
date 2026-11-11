@@ -108,6 +108,8 @@ export type TxFilters = {
   type?: TxType;
   q?: string;
   accountId?: string;
+  /** "both" → also match incoming TRANSFER rows (toAccountId) — per-account statement */
+  accountSide?: "primary" | "both";
   categoryId?: string;
   from?: string;
   to?: string;

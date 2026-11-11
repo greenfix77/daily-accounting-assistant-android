@@ -486,6 +486,9 @@ function buildBalanceAfterMap(
     // transfer drifts down by the transfer amount
     if (t.type === "TRANSFER" && t.toAccountId) {
       running.set(t.toAccountId, (running.get(t.toAccountId) ?? 0) + t.amount);
+      // record the destination's balance after this transfer under "txId:accountId"
+      // so the both-side statement view can show it for the credited account
+      after.set(`${t.id}:${t.toAccountId}`, running.get(t.toAccountId) ?? 0);
     }
   }
   return after;
@@ -609,6 +612,9 @@ export interface TxFilters {
   type?: string;
   q?: string;
   accountId?: string;
+  /** "both" → also match TRANSFER rows credited to this account (toAccountId)
+   *  — used by the per-account statement (گردش حساب) so incoming transfers show up */
+  accountSide?: "primary" | "both";
   categoryId?: string;
   from?: string;
   to?: string;
@@ -634,9 +640,19 @@ export async function getTransactions(filters: TxFilters = {}): Promise<Transact
   const limitRaw = toInt(filters.limit);
   const limit = Math.min(Math.max(limitRaw ?? 200, 1), 500);
 
+  const bothSides = filters.accountSide === "both" && !!accountId;
+
   let rows = txs;
   if (type && TX_TYPES.includes(type)) rows = rows.filter((t) => t.type === type);
-  if (accountId) rows = rows.filter((t) => t.accountId === accountId);
+  if (accountId) {
+    rows = bothSides
+      ? rows.filter(
+          (t) =>
+            t.accountId === accountId ||
+            (t.type === "TRANSFER" && t.toAccountId === accountId),
+        )
+      : rows.filter((t) => t.accountId === accountId);
+  }
   if (categoryId === "none") rows = rows.filter((t) => t.categoryId === null);
   else if (categoryId) rows = rows.filter((t) => t.categoryId === categoryId);
   if (q) {
@@ -690,7 +706,17 @@ export async function getTransactions(filters: TxFilters = {}): Promise<Transact
     .slice(0, limit)
     .map((row) => {
       const dto = txDTO(row, accMap, catMap, walletMap);
-      dto.balanceAfter = dateSorted ? (after.get(row.id) ?? null) : null;
+      if (dateSorted) {
+        // both-side statement view: a transfer credited to the requested account
+        // must show the DESTINATION's running balance, not the source's
+        const destKey =
+          bothSides && row.type === "TRANSFER" && row.toAccountId === accountId
+            ? `${row.id}:${accountId}`
+            : null;
+        dto.balanceAfter = (destKey ? after.get(destKey) : after.get(row.id)) ?? null;
+      } else {
+        dto.balanceAfter = null;
+      }
       return dto;
     });
 }
