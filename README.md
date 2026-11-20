@@ -1,115 +1,153 @@
-# حساب یار ری را 💰
+# HesabYar ReyRa 💰 — ReyRa Daily Accounting Assistant
 
-اپلیکیشن مدیریت مالی شخصی موبایلی (فارسی، RTL) با تم سبز نعنایی پاستلی، تقویم شمسی و پشتیبانی کامل تبلت.
-**کاملاً آفلاین** — تمام داده‌ها روی خود دستگاه ذخیره می‌شود و خروجی **APK اندرویدی** دارد.
+**English** | [فارسی](README.fa.md)
 
-## ✨ امکانات
+A personal finance / daily accounting app for mobile (Persian & RTL by default, with full English support), featuring a pastel mint-green theme, the Jalali (Shamsi) calendar, and complete tablet support.
+**Fully offline** — all data lives on the device itself, and it ships as an installable **Android APK**.
 
-- 📊 **داشبورد** — موجودی کل، درآمد/هزینه امروز و ماه، نمودار ۷ روز اخیر، تراکنش‌های اخیر، پیش‌امدها
-- 💳 **تراکنش‌ها** — درآمد/هزینه/انتقال، جستجو، فیلتر، ویرایش و حذف
-- 🏦 **حساب‌ها** — بانکی/نقدی/پس‌انداز با موجودی اولیه و تراز خودکار
-- 🏷️ **دسته‌بندی‌ها** — با آیکون و رنگ، تفکیک درآمد/هزینه
-- 🎯 **بودجه‌بندی** — بودجه کل ماه + بودجه هر دسته با هشدار عبور از سقف
-- 🤝 **بدهی و طلب** — مدیریت بدهی‌ها با ثبت پرداخت‌های جزئی و تسویه
-- 🔁 **اقساط و دوره‌ای** — تراکنش‌های تکراری ماهانه با شمارش اقساط پرداخت‌شده
-- 🐷 **اهداف پس‌انداز** — درصد پیشرفت، واریز و برداشت
-- 📈 **گزارش‌ها** — ۴ بازه (روزانه/هفتگی/ماهانه/سالانه) با نمودار و تفکیک دسته‌ای
-- ⏰ **یادآورها** — قبض، قسط، پس‌انداز با تکرار ماهانه/سالانه
-- 📤 **خروجی و پشتیبان‌گیری** — CSV / Excel / JSON + بازیابی
-- ⚙️ **تنظیمات** — فارسی/انگلیسی، تم روشن/تاریک، تقویم شمسی/میلادی، واحد پول، قفل اپ با PIN و ورود با اثر انگشت (وب)
-- 📴 **آفلاین ۱۰۰٪** — بدون هیچ سرور و اتصال شبکه‌ای؛ دیتابیس روی خود دستگاه (IndexedDB)
+> 🌍 **Developers welcome!** This project is actively looking for contributors. Whether you want to fix a bug, add a feature, improve the UI, translate the app to a new language, or write documentation — you are more than welcome. See [🤝 Contributing](#-contributing--help-this-project-grow) below.
 
-## 🛠 تکنولوژی
+## ✨ Features
 
-| لایه | تکنولوژی |
+- 📊 **Dashboard** — total balance, today's/monthly income & expense, 7-day chart, recent transactions, upcoming events
+- 💳 **Transactions** — income / expense / transfer, search, filters, edit & delete, and per-transaction **time** (entered manually or auto-recorded at the moment of entry)
+- 🏦 **Accounts** — bank / cash / savings with opening balance and automatic reconciliation, plus a **statement view** per account (last 10/20/50 movements, filtered by Jalali date range)
+- 🏷️ **Categories** — icon & color, split income/expense
+- 🎯 **Budgeting** — monthly overall budget + per-category budgets with over-limit warnings
+- 🤝 **Debts & Credits** — manage debts with partial payments and settlement
+- 🔁 **Installments & Recurring** — monthly recurring transactions with paid-installment counters
+- 🐷 **Savings Goals** — progress percentage, deposits & withdrawals
+- 📈 **Reports** — 4 ranges (daily/weekly/monthly/yearly) with charts and per-category breakdown
+- ⏰ **Reminders** — bills, installments, savings with monthly/yearly repeat
+- 📤 **Export & Backup** — CSV / Excel / JSON + restore
+- ⚙️ **Settings** — Persian/English, light/dark theme, Jalali/Gregorian calendar, currency, app lock with PIN and web fingerprint unlock
+- 📴 **100% Offline** — no servers, no network calls; the database lives on your device (IndexedDB)
+
+## 🛠 Tech Stack
+
+| Layer | Technology |
 |------|----------|
-| فریم‌ورک | Next.js 16 (App Router) + TypeScript |
+| Framework | Next.js 16 (App Router) + TypeScript |
 | UI | Tailwind CSS 4 + shadcn/ui + Lucide + Framer Motion |
-| دیتابیس | **Dexie (IndexedDB)** روی خود دستگاه — آفلاین |
-| اندروید | **Capacitor 7** → خروجی APK |
+| Database | **Dexie (IndexedDB)** on-device — offline |
+| Android | **Capacitor 7** → APK |
 | State | TanStack Query + Zustand |
-| تقویم | جلالی (تبدیل دستی، بدون وابستگی خارجی) |
-| فونت | Vazirmatn (لوکال) |
+| Calendar | Jalali (hand-rolled conversion, zero external deps) |
+| Font | Vazirmatn (local) |
 
-## 🚀 اجرای محلی (وب)
+## 🚀 Run Locally (Web)
 
 ```bash
 bun install
 bun run dev
 ```
 
-> 🔒 اپ با **دیتابیس خالی** عرضه می‌شود؛ تمام اطلاعات (پروفایل، حساب‌ها، تراکنش‌ها و…) توسط خود کاربر وارد می‌شود.
-> داده‌ها در IndexedDB مرورگر ذخیره می‌شوند.
+> 🔒 The app ships with an **empty database**; all data (profile, accounts, transactions, …) is entered by the user.
+> Data is stored in the browser's IndexedDB.
 
-## 📱 نصب APK اندرویدی — دانلود از Releases
+## 📱 Install the Android APK — Download from Releases
 
-**سریع‌ترین راه:** وارد ریپو شوید → بخش **Releases** (سمت راست) → آخرین نسخه → فایل **`HesabYar-ReyRa-<نسخه>.apk`** را دانلود کنید → روی گوشی/تبلت نصب کنید (بار اول اندروید اجازه «نصب از منابع ناشناس» می‌خواهد — اجازه دهید). تمام!
+**Quickest way:** open the repo → the **Releases** section (right side) → latest release → download **`HesabYar-ReyRa-<version>.apk`** → install it on your phone/tablet (Android will ask for "install from unknown sources" the first time — allow it). Done!
 
-## 🏗 ساخت APK (کاملاً آفلاین) — با یک کلیک در گیت‌هاب
+## 🏗 Build the APK (fully offline) — one click on GitHub
 
-پروژه یک **GitHub Actions workflow** آماده دارد که در فضای ابری گیت‌هاب، خروجی استاتیک اپ را داخل قاب Capacitor بسته و APK نصبی می‌سازد — بدون نیاز به هیچ ابزاری روی سیستم شما:
+The project ships with a ready-made **GitHub Actions workflow** that builds the static web app inside a Capacitor shell in GitHub's cloud and produces an installable APK — no tooling required on your machine:
 
-1. وارد ریپو شوید → تب **Actions** → از لیست سمت چپ **«Build Android APK»** را انتخاب کنید.
-2. دکمه **«Run workflow»** را بزنید → **Run workflow** (روی شاخه `main`).
-3. ~۴ تا ۶ دقیقه صبر کنید → روی اجرای تمام‌شده کلیک کنید → از بخش **Artifacts** فایل **`HesabYar-ReyRa-APK`** را دانلود کنید.
-4. فایل ZIP را باز کنید → `HesabYar-ReyRa-<نسخه>.apk` را به گوشی/تبلت بفرستید و نصب کنید
-   (بار اول اندروید از شما اجازه «نصب از منابع ناشناس» می‌خواهد — اجازه دهید).
+1. Open the repo → **Actions** tab → pick **“Build Android APK”** from the left list.
+2. Hit **“Run workflow”** → **Run workflow** (on the `main` branch).
+3. Wait ~4–6 minutes → click the finished run → under **Artifacts** download **`HesabYar-ReyRa-APK`**.
+4. Unzip it → send `HesabYar-ReyRa-<version>.apk` to your phone/tablet and install
+   (Android will ask for "install from unknown sources" the first time — allow it).
 
-> 🏷 به‌جای Run workflow می‌توانید یک تگ `v*` push کنید (مثلاً `git tag v1.0.0 && git push origin v1.0.0`) — در این حالت APK داخل یک **GitHub Release** هم قرار می‌گیرد.
-> 🔐 داده‌ها فقط و فقط روی دستگاه شما (حافظه اپ) ذخیره می‌شوند؛ هیچ درخواست شبکه‌ای انجام نمی‌شود.
-> 🔢 این بیلد، APK **debug** با **امضای پایدار** است و برای استفاده شخصی کاملاً مناسب است؛ برای انتشار در پلی‌استور به امضای release نیاز است.
-> 🗓 ساخت جداول و راه‌اندازی، کاملاً خودکار است — نصب کنید، باز کنید، ثبت‌نام کنید، تمام!
+> 🏷 Instead of Run workflow you can push a `v*` tag (e.g. `git tag v1.0.0 && git push origin v1.0.0`) — the APK then lands in a **GitHub Release** too.
+> 🔐 Data is stored only on your device (app storage); no network requests are made.
+> 🔢 This build is a **debug** APK with a **stable signature**, perfectly fine for personal use; Play Store publishing requires a release signature.
+> 🗓 Table creation and setup are fully automatic — install, open, sign up, done!
 
-### ↩️ دانگرید / برگشت به نسخه قبلی
+### ↩️ Downgrade / Roll back to an older version
 
-اندروید به‌صورت سیستمی اجازه نمی‌دهد نسخه‌ای با **versionCode پایین‌تر** روی نسخه نصب‌شده نصب شود (`INSTALL_FAILED_VERSION_DOWNGRADE` — روی برخی گوشی‌ها مثل سامسونگ با پیام گمراه‌کننده‌ی «App not installed as package appears to be invalid»). این محدودیت خود اندروید است، نه ایراد APK. دو راه برای برگشت:
+Android system-wide refuses to install a build with a **lower versionCode** over an installed one (`INSTALL_FAILED_VERSION_DOWNGRADE` — on some phones, e.g. Samsung, it shows the misleading message “App not installed as package appears to be invalid”). This is an Android limitation, not an APK defect. Two ways to roll back:
 
-**راه ۱ — بیلد برگشتی (بدون کامپیوتر؛ نصب مستقیم از UI):**
-1. در تب **Actions** → «Build Android APK» → **Run workflow** (یا از من بخواهید):
-   - **`build_ref`** = تگ نسخه موردنظر (مثلاً `v1.0.23-android`)
-   - **`version_code_override`** = عددی **بزرگ‌تر از versionCode نسخه نصب‌شده** (مثلاً `26` وقتی versionCode نصب‌شده `25` است)
-2. APK با نام `HesabYar-ReyRa-<نسخه>-rc<کد>.apk` ساخته می‌شود و به Release همان تگ هم پیوست می‌گردد؛ مثل یک به‌روزرسانی معمولی روی نسخه فعلی نصب می‌شود — **بدون حذف اپ و بدون از دست رفتن داده‌ها**.
+**Option 1 — rollback build (no computer; installs right from the UI):**
+1. In the **Actions** tab → “Build Android APK” → **Run workflow** (or just ask me):
+   - **`build_ref`** = the tag of the target version (e.g. `v1.0.23-android`)
+   - **`version_code_override`** = a number **greater than the installed versionCode** (e.g. `26` when the installed versionCode is `25`)
+2. An APK named `HesabYar-ReyRa-<version>-rc<code>.apk` is produced and also attached to that tag's Release; it installs like a regular update over the current build — **without uninstalling and without data loss**.
 
-**راه ۲ — adb (با کامپیوتر):**
+**Option 2 — adb (with a computer):**
 
 ```bash
 adb install -r -d HesabYar-ReyRa-1.0.23.apk
 ```
 
-فلگ `-d` اجازه نصب نسخه پایین‌تر را می‌دهد و `-r` داده‌ها را حفظ می‌کند (USB debugging لازم است).
+The `-d` flag allows version downgrade and `-r` keeps your data (requires USB debugging).
 
-> ⚠️ اگر یک بیلد برگشتی نصب کنید، برگشت دوباره به جلو فقط با نسخه‌ای که versionCode بزرگ‌تری دارد ممکن است (نسخه‌های رسمی جدید همه از بیلدهای برگشتی بالاتر stamp می‌شوند) یا با حذف اپ.
-> 🔢 **طرح versionCode از نسخه‌های بعدی:** `major×10000 + minor×100 + patch` (مثلاً 1.0.25 → `10025`) تا همیشه فضای کافی برای بیلدهای برگشتی باقی بماند.
+> ⚠️ If you install a rollback build, rolling forward again requires a version with a higher versionCode (all new official builds are stamped above rollback builds) or uninstalling the app.
+> 🔢 **versionCode scheme (from recent versions onward):** `major×10000 + minor×100 + patch` (e.g. 1.0.25 → `10025`) so there is always headroom for rollback builds.
 
-### نکات نسخه اندروید
-- 🔐 **امضای پایدار** — `android/app/debug.keystore` داخل ریپو کامیت شده و همه بیلدهای CI با یک کلید امضا می‌شوند؛ نسخه‌های جدید بدون حذف اپ (و بدون از دست رفتن داده‌ها) روی نسخه قبلی نصب می‌شوند. دانگریدِ مستقیم اما توسط خود اندروید مسدود است — بخش «↩️ دانگرید» را ببینید.
-- 🔒 **قفل اپ با PIN** به‌طور کامل کار می‌کند (ورود با اثر انگشتِ وب‌محور در WebView پشتیبانی نمی‌شود؛ افزودن biometric بومی در نقشه راه است).
-- ↩️ دکمه **Back** سخت‌افزاری اندروید به‌درستی بین صفحات اپ حرکت می‌کند.
-- 🖼 آیکون و اسپلش اپ از `assets/` ساخته می‌شوند (`bunx @capacitor/assets generate --android`).
+### Android build notes
+- 🔐 **Stable signature** — `android/app/debug.keystore` is committed to the repo and all CI builds are signed with the same key; new versions install over the previous one without uninstalling (and without data loss). Straight downgrades, however, are blocked by Android itself — see the “↩️ Downgrade” section.
+- 🔒 **PIN app lock** works fully (web-style fingerprint unlock is not supported inside the WebView; adding native biometric is on the roadmap).
+- ↩️ The Android hardware **Back** button navigates correctly between app screens.
+- 🖼 The app icon and splash are generated from `assets/` (`bunx @capacitor/assets generate --android`).
 
-### بیلد دستی (اختیاری، روی سیستم خودتان)
+### Manual build (optional, on your own machine)
 
 ```bash
 bun install
-rm -rf src/app/api          # APK فقط کلاینت است
-bun run build:apk           # خروجی استاتیک → out/
+rm -rf src/app/api          # the APK is client-only
+bun run build:apk           # static output → out/
 bunx cap sync android
 cd android && ./gradlew assembleDebug
-# خروجی: android/app/build/outputs/apk/debug/app-debug.apk
+# output: android/app/build/outputs/apk/debug/app-debug.apk
 ```
 
-## ☁️ اجرای وب روی سرور (اختیاری)
+## ☁️ Host the Web App (optional)
 
-نسخه وب هم قابل میزبانی است؛ ولی دیتابیس کلاینت-محلی است و اپ نیازی به سرور ندارد — هر هاست استاتیک یا Node کافی است. راهنمای گزینه‌های Railway (Docker + volume) و Vercel در تاریخ کامیت‌ها و `Dockerfile` / `railway.toml` موجود است.
+The web version can be hosted too; but the database is client-side and the app needs no server — any static or Node host will do. Guides for Railway (Docker + volume) and Vercel are available in the commit history and in `Dockerfile` / `railway.toml`.
 
-## 🗺 نقشه راه
+## 🗺 Roadmap
 
-- [x] مهاجرت لایه دیتا به دیتابیس محلی دستگاه (Dexie/IndexedDB)
-- [x] خروجی استاتیک + پوشش Capacitor
-- [x] بیلد خودکار APK با GitHub Actions
-- [ ] ورود با اثر انگشت بومی در APK (@capacitor-community/native-biometric)
-- [ ] امضای release برای انتشار در پلی‌استور
+- [x] Migrate the data layer to on-device storage (Dexie/IndexedDB)
+- [x] Static export + Capacitor shell
+- [x] Automated APK builds with GitHub Actions
+- [x] Transaction time — manual entry with automatic fallback to the entry moment
+- [ ] Native fingerprint unlock in the APK (@capacitor-community/native-biometric)
+- [ ] Release signing for Play Store publishing
 
-## 📄 مجوز
+## 🤝 Contributing — Help This Project Grow
+
+**This project is an open invitation to developers!** HesabYar ReyRa is a free, open-source (MIT) personal finance app, and it will only get better with your help. If you are a developer — junior or senior — this is a friendly, real-world codebase where your contribution genuinely ships: every merged PR ends up in the next Android APK release.
+
+**Why contribute here?**
+- 🎯 Real impact — the app is actively used and released; your work reaches users fast.
+- 🧹 Modern stack — Next.js 16, TypeScript, Tailwind 4, shadcn/ui, TanStack Query, Zustand, Dexie, Capacitor.
+- 📦 Small & readable — a compact codebase you can fully understand in an afternoon.
+- 🌱 Great first issues — i18n, new report charts, widgets, validation, accessibility, docs.
+
+**How you can help:**
+- 🐞 Fix bugs or report issues (with steps to reproduce)
+- ✨ Build features from the roadmap, or propose your own
+- 🌍 Add a new language (the dictionary lives in `src/lib/i18n.ts`)
+- 🎨 Improve UI/UX, accessibility and dark mode
+- 📝 Improve docs (English, Persian, or a new language)
+- 🧪 Add tests, CI improvements, or release tooling
+
+**Getting started is easy:**
+
+```bash
+# 1. Fork & clone
+git clone https://github.com/greenfix77/daily-accounting-assistant-android.git
+# 2. Install & run
+bun install && bun run dev
+# 3. Create a branch, make your change, and open a Pull Request
+git checkout -b feat/my-feature
+```
+
+Pull Requests are welcome at any size — a one-line fix is just as appreciated as a big feature. If you are unsure where to start, open an issue and say hello; we will help you find a task that fits.
+
+> 💡 Ideas that would make a real difference: native biometric unlock for the APK, i18n for a third language, CSV import, recurring-transfer automation, richer report charts, and unit tests for the Jalali calendar utilities.
+
+## 📄 License
 
 MIT
